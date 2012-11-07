@@ -61,7 +61,9 @@ TEMPLATE_SCENE_ASCII = """\
     "objects"       : %(nobjects)s,
     "geometries"    : %(ngeometries)s,
     "materials"     : %(nmaterials)s,
-    "textures"      : %(ntextures)s
+    "textures"      : %(ntextures)s,
+    "cameras"       : %(ncameras)s,
+    "lights"        : %(nlights)s
 },
 
 "type" : "scene",
@@ -253,6 +255,9 @@ def generate_bool_property(property):
 def generate_string(s):
     return TEMPLATE_STRING % s
 
+def generate_color(rgb):
+    color = (int(rgb[0]*255) << 16) + (int(rgb[1]*255) << 8) + int(rgb[2]*255);
+    return color
 # #####################################################
 # Parse - mesh 
 # #####################################################
@@ -592,11 +597,63 @@ def extract_scene_embed_list_from_scene(scene):
     return scene_embed_list
 
 # #####################################################
+# Parse - Lights 
+# #####################################################
+def extract_light_from_node(node):
+    name = node.GetName()
+    light = node.GetNodeAttribute()
+    light_types = ["point", "directional", "spot", "area", "volume"]
+    light_type = light_types[light.LightType.Get()]
+
+    transform = node.EvaluateGlobalTransform()
+    position = transform.GetT()
+
+    # TODO:
+    #   Support light direction
+    light_string = ""
+    if light_type == "directional":
+        light_string = TEMPLATE_LIGHT_DIRECTIONAL % {
+        "light_id"      : generate_string(name),
+        "direction"     : generate_vec3([0, 0, 0]),
+        "color"         : generate_color(light.Color.Get()),
+        "intensity"     : light.Intensity.Get() / 100
+        }
+
+    elif light_type == "point":
+        light_string = TEMPLATE_LIGHT_POINT % {
+        "light_id"      : generate_string(name),
+        "position"      : generate_vec3(position),
+        "color"         : generate_color(light.Color.Get()),
+        "intensity"     : light.Intensity.Get() / 100
+        }
+
+    return light_string
+
+def extract_scene_light_list_from_hierarchy(node, scene_light_list):
+    if node.GetNodeAttribute() == None:
+        print("NULL Node Attribute\n")
+    else:
+        lAttributeType = (node.GetNodeAttribute().GetAttributeType())
+        if lAttributeType == FbxNodeAttribute.eLight:
+            scene_light = extract_light_from_node(node)
+            scene_light_list.append(scene_light)
+    for i in range(node.GetChildCount()):
+        extract_scene_light_list_from_hierarchy(node.GetChild(i), scene_light_list)
+
+def extract_scene_light_list_from_scene(scene):
+    scene_light_list = []
+    node = scene.GetRootNode()
+    if node:
+        for i in range(node.GetChildCount()):
+            extract_scene_light_list_from_hierarchy(node.GetChild(i), scene_light_list)
+    return scene_light_list
+
+# #####################################################
 # Parse - Cameras 
 # #####################################################
 def extract_camera_from_node(node):
-    camera = node.GetNodeAttribute()
     name = node.GetName()
+    camera = node.GetNodeAttribute()
 
     target_node = node.GetTarget()
     target = ""
@@ -674,7 +731,7 @@ def extract_scene(scene, filename):
     textures = []
     materials = []
     cameras = extract_scene_camera_list_from_scene(scene)
-    lights = []
+    lights = extract_scene_light_list_from_scene(scene)
 
     nobjects = len(objects)
     ngeometries = len(geometries)
@@ -717,8 +774,11 @@ def extract_scene(scene, filename):
     "nobjects"      : nobjects,
     "ngeometries"   : ngeometries,
     "ntextures"     : ntextures,
-    "basetype"      : generate_string(basetype),
     "nmaterials"    : nmaterials,
+    "ncameras"      : ncameras,
+    "nlights"       : nlights,
+
+    "basetype"      : generate_string(basetype),
 
     "position"      : generate_vec3(DEFAULTS["position"]),
     "rotation"      : generate_vec3(DEFAULTS["rotation"]),
