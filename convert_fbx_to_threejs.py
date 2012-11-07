@@ -48,8 +48,6 @@ MAX_INFLUENCES = 2
 # #####################################################
 # Templates 
 # #####################################################
-TEMPLATE_GENERATED_BY = "https://github.com/zfedoran/fbx-to-threejs"
-
 TEMPLATE_SCENE_ASCII = """\
 {
 
@@ -57,7 +55,7 @@ TEMPLATE_SCENE_ASCII = """\
 {
     "formatVersion" : 3.1,
     "sourceFile"    : %(fname)s,
-    "generatedBy"   : "Blender 2.63 Exporter",
+    "generatedBy"   : "https://github.com/zfedoran/fbx-to-threejs",
     "objects"       : %(nobjects)s,
     "geometries"    : %(ngeometries)s,
     "materials"     : %(nmaterials)s,
@@ -516,8 +514,8 @@ def extract_scene_object_list_from_hierarchy(node, scene_object_list):
     if node.GetNodeAttribute() == None:
         print("NULL Node Attribute\n")
     else:
-        lAttributeType = (node.GetNodeAttribute().GetAttributeType())
-        if lAttributeType == FbxNodeAttribute.eMesh:
+        attribute_type = (node.GetNodeAttribute().GetAttributeType())
+        if attribute_type == FbxNodeAttribute.eMesh:
             scene_object = extract_mesh_object_from_node(node)
             scene_object_list.append(scene_object)
     for i in range(node.GetChildCount()):
@@ -548,8 +546,8 @@ def extract_scene_geometry_list_from_hierarchy(node, scene_geometry_list):
     if node.GetNodeAttribute() == None:
         print("NULL Node Attribute\n")
     else:
-        lAttributeType = (node.GetNodeAttribute().GetAttributeType())
-        if lAttributeType == FbxNodeAttribute.eMesh:
+        attribute_type = (node.GetNodeAttribute().GetAttributeType())
+        if attribute_type == FbxNodeAttribute.eMesh:
             scene_geometry = extract_geometry_from_node(node)
             scene_geometry_list.append(scene_geometry)
     for i in range(node.GetChildCount()):
@@ -581,8 +579,8 @@ def extract_scene_embed_list_from_hierarchy(node, scene_embed_list):
     if node.GetNodeAttribute() == None:
         print("NULL Node Attribute\n")
     else:
-        lAttributeType = (node.GetNodeAttribute().GetAttributeType())
-        if lAttributeType == FbxNodeAttribute.eMesh:
+        attribute_type = (node.GetNodeAttribute().GetAttributeType())
+        if attribute_type == FbxNodeAttribute.eMesh:
             scene_embed = extract_embed_from_node(node)
             scene_embed_list.append(scene_embed)
     for i in range(node.GetChildCount()):
@@ -633,8 +631,8 @@ def extract_scene_light_list_from_hierarchy(node, scene_light_list):
     if node.GetNodeAttribute() == None:
         print("NULL Node Attribute\n")
     else:
-        lAttributeType = (node.GetNodeAttribute().GetAttributeType())
-        if lAttributeType == FbxNodeAttribute.eLight:
+        attribute_type = (node.GetNodeAttribute().GetAttributeType())
+        if attribute_type == FbxNodeAttribute.eLight:
             scene_light = extract_light_from_node(node)
             scene_light_list.append(scene_light)
     for i in range(node.GetChildCount()):
@@ -706,8 +704,8 @@ def extract_scene_camera_list_from_hierarchy(node, scene_camera_list):
     if node.GetNodeAttribute() == None:
         print("NULL Node Attribute\n")
     else:
-        lAttributeType = (node.GetNodeAttribute().GetAttributeType())
-        if lAttributeType == FbxNodeAttribute.eCamera:
+        attribute_type = (node.GetNodeAttribute().GetAttributeType())
+        if attribute_type == FbxNodeAttribute.eCamera:
             scene_camera = extract_camera_from_node(node)
             scene_camera_list.append(scene_camera)
     for i in range(node.GetChildCount()):
