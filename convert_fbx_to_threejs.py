@@ -592,6 +592,79 @@ def extract_scene_embed_list_from_scene(scene):
     return scene_embed_list
 
 # #####################################################
+# Parse - Cameras 
+# #####################################################
+def extract_camera_from_node(node):
+    camera = node.GetNodeAttribute()
+    name = node.GetName()
+
+    target_node = node.GetTarget()
+    target = ""
+    if target_node:
+        transform = target.EvaluateGlobalTransform()
+        target = generate_vec3(transform.GetT())
+    else:
+        target = generate_vec3(camera.InterestPosition.Get())
+
+    position = generate_vec3(camera.Position.Get())
+    aspect = camera.PixelAspectRatio.Get()
+    near = camera.NearPlane.Get()
+    far = camera.FarPlane.Get()
+    fov = camera.FieldOfView.Get()
+  
+    projection_types = [ "perspective", "orthogonal" ]
+    projection = projection_types[camera.ProjectionType.Get()]
+
+    # TODO:
+    #   Support more than perspective camera
+    #   Get correct fov
+    camera_string = ""
+    if projection == "perspective":
+        camera_string = TEMPLATE_CAMERA_PERSPECTIVE % {
+        "camera_id" : generate_string(name),
+        "fov"       : fov,
+        "aspect"    : aspect,
+        "near"      : near,
+        "far"       : far,
+        "position"  : position,
+        "target"    : target
+        }
+    else:
+        camera = DEFAULTS["camera"]
+        camera_string = TEMPLATE_CAMERA_ORTHO % {
+        "camera_id" : generate_string(camera["name"]),
+        "left"      : camera["left"],
+        "right"     : camera["right"],
+        "top"       : camera["top"],
+        "bottom"    : camera["bottom"],
+        "near"      : camera["near"],
+        "far"       : camera["far"],
+        "position"  : generate_vec3(camera["position"]),
+        "target"    : generate_vec3(camera["target"])
+        }
+
+    return camera_string
+
+def extract_scene_camera_list_from_hierarchy(node, scene_camera_list):
+    if node.GetNodeAttribute() == None:
+        print("NULL Node Attribute\n")
+    else:
+        lAttributeType = (node.GetNodeAttribute().GetAttributeType())
+        if lAttributeType == FbxNodeAttribute.eCamera:
+            scene_camera = extract_camera_from_node(node)
+            scene_camera_list.append(scene_camera)
+    for i in range(node.GetChildCount()):
+        extract_scene_camera_list_from_hierarchy(node.GetChild(i), scene_camera_list)
+
+def extract_scene_camera_list_from_scene(scene):
+    scene_camera_list = []
+    node = scene.GetRootNode()
+    if node:
+        for i in range(node.GetChildCount()):
+            extract_scene_camera_list_from_hierarchy(node.GetChild(i), scene_camera_list)
+    return scene_camera_list
+
+# #####################################################
 # Parse - Scene 
 # #####################################################
 def extract_scene(scene, filename):
@@ -600,7 +673,7 @@ def extract_scene(scene, filename):
     embeds = extract_scene_embed_list_from_scene(scene)
     textures = []
     materials = []
-    cameras = []
+    cameras = extract_scene_camera_list_from_scene(scene)
     lights = []
 
     nobjects = len(objects)
