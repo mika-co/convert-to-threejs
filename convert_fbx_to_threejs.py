@@ -256,6 +256,10 @@ def generate_string(s):
 def generate_color(rgb):
     color = (int(rgb[0]*255) << 16) + (int(rgb[1]*255) << 8) + int(rgb[2]*255);
     return color
+    
+def generate_rotation(v):
+    return TEMPLATE_VEC3 % (v[0]/180, v[1]/180, v[2]/180)
+
 # #####################################################
 # Parse - mesh 
 # #####################################################
@@ -453,7 +457,6 @@ def extract_mesh_from_node(node):
     faces = extract_mesh_faces(mesh, option_normals, option_colors, option_uv_coords, option_materials, vertex_offset, material_offset)
 
     metadata = {
-      "generatedby"   : TEMPLATE_GENERATED_BY,
       "nvertex"      : len(positions),
       "nface"         : len(faces),
       "nnormal"       : len(normals),
@@ -490,7 +493,7 @@ def extract_mesh_object_from_node(node):
     transform = node.EvaluateGlobalTransform()
     translation = generate_vec3(transform.GetT())
     scale = generate_vec3(transform.GetS())
-    rotation = generate_vec3(transform.GetR())
+    rotation = generate_rotation(transform.GetR())
     rotationq = generate_vec4(transform.GetQ())
 
     object_info = {
