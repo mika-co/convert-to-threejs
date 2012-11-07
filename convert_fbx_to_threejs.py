@@ -1,49 +1,62 @@
 import os
 import sys
+import math
+
+# #####################################################
+# Configuration
+# #####################################################
+
+DEFAULTS = {
+"bgcolor" : [0, 0, 0],
+"bgalpha" : 1.0,
+
+"position" : [0, 0, 0],
+"rotation" : [-math.pi/2, 0, 0],
+"scale"    : [1, 1, 1],
+
+"camera"  :
+    {
+        "name" : "default_camera",
+        "type" : "perspective",
+        "near" : 1,
+        "far"  : 10000,
+        "fov"  : 60,
+        "aspect": 1.333,
+        "position" : [0, 0, 10],
+        "target"   : [0, 0, 0]
+    },
+
+"light" :
+ {
+    "name"       : "default_light",
+    "type"       : "directional",
+    "direction"  : [0, 1, 1],
+    "color"      : [1, 1, 1],
+    "intensity"  : 0.8
+ }
+}
+
+# default colors for debugging (each material gets one distinct color):
+# white, red, green, blue, yellow, cyan, magenta
+COLORS = [0xeeeeee, 0xee0000, 0x00ee00, 0x0000ee, 0xeeee00, 0x00eeee, 0xee00ee]
+
+
+# skinning
+MAX_INFLUENCES = 2
+
 
 # #####################################################
 # Templates 
 # #####################################################
 TEMPLATE_GENERATED_BY = "https://github.com/zfedoran/fbx-to-threejs"
 
-TEMPLATE_METADATA = """\
-	"metadata" :
-	{
-		"formatVersion" : 3.1,
-    "generatedBy"   : "%(generatedby)s",
-		"vertices"      : %(nvertex)d,
-		"faces"         : %(nface)d,
-		"normals"       : %(nnormal)d,
-		"colors"        : %(ncolor)d,
-		"uvs"           : [%(nuvs)s],
-		"materials"     : %(nmaterial)d,
-		"morphTargets"  : %(nmorphTarget)d,
-		"bones"         : %(nbone)d
-	},
-"""
-
-TEMPLATE_MODEL = """\
-	"scale" : %(scale)f,
-	"materials" : [%(materials)s],
-	"vertices" : [%(vertices)s],
-	"morphTargets" : [%(morphTargets)s],
-	"normals" : [%(normals)s],
-	"colors" : [%(colors)s],
-	"uvs" : [%(uvs)s],
-	"faces" : [%(faces)s],
-	"bones" : [%(bones)s],
-	"skinIndices" : [%(skinIndices)s],
-	"skinWeights" : [%(skinWeights)s],
-	"animation" : {%(animation)s}
-"""
-
 TEMPLATE_SCENE_ASCII = """\
 {
 
 "metadata" :
 {
-    "formatVersion" : 3,
-    "sourceFile"    : "%(fname)s",
+    "formatVersion" : 3.1,
+    "sourceFile"    : %(fname)s,
     "generatedBy"   : "Blender 2.63 Exporter",
     "objects"       : %(nobjects)s,
     "geometries"    : %(ngeometries)s,
@@ -79,6 +92,40 @@ TEMPLATE_SECTION = """
 %s
 },
 """
+
+TEMPLATE_MESH = """\
+%(metadata)s
+        "scale" : %(scale)f,
+        "materials" : [%(materials)s],
+        "vertices" : [%(vertices)s],
+        "morphTargets" : [%(morphTargets)s],
+        "normals" : [%(normals)s],
+        "colors" : [%(colors)s],
+        "uvs" : [%(uvs)s],
+        "faces" : [%(faces)s],
+        "bones" : [%(bones)s],
+        "skinIndices" : [%(skinIndices)s],
+        "skinWeights" : [%(skinWeights)s],
+        "animation" : {%(animation)s}
+"""
+
+TEMPLATE_MESH_METADATA = """\
+"metadata" : {
+            "vertices"      : %(nvertex)d,
+            "faces"         : %(nface)d,
+            "normals"       : %(nnormal)d,
+            "colors"        : %(ncolor)d,
+            "uvs"           : [%(nuvs)s],
+            "materials"     : %(nmaterial)d,
+            "morphTargets"  : %(nmorphTarget)d,
+            "bones"         : %(nbone)d
+        },
+"""
+
+TEMPLATE_MESH_EMBED = """\
+    "%(embed_id)s" : {
+        %(embed)s
+    }"""
 
 TEMPLATE_OBJECT = """\
     "%(object_id)s" : {
@@ -195,6 +242,16 @@ def generate_normal(n):
 def generate_uv(uv):
     return TEMPLATE_UV % (uv[0], uv[1])
 
+def generate_section(label, content):
+    return TEMPLATE_SECTION % (label, content)
+
+def generate_bool_property(property):
+    if property:
+        return "true"
+    return "false"
+
+def generate_string(s):
+    return TEMPLATE_STRING % s
 
 # #####################################################
 # Parse - mesh 
@@ -405,6 +462,7 @@ def extract_mesh_from_node(node):
     }
 
     mesh = {
+      "metadata" : TEMPLATE_MESH_METADATA % metadata,
       "scale" : 1,
       "materials" : "",
       "vertices" : ",".join(generate_vertex(v) for v in positions),
@@ -419,39 +477,13 @@ def extract_mesh_from_node(node):
       "animation" : ""
     }
 
-    print(len(positions))
-    print(len(normals))
-    print(len(uvs))
-    print(len(faces))
-
-    mesh_output = ""
-    mesh_output += TEMPLATE_METADATA % metadata
-    mesh_output += TEMPLATE_MODEL % mesh
-    return mesh_output
-
-def extract_mesh_list_from_hierarchy(node, mesh_list):
-    if node.GetNodeAttribute() == None:
-        print("NULL Node Attribute\n")
-    else:
-        lAttributeType = (node.GetNodeAttribute().GetAttributeType())
-        if lAttributeType == FbxNodeAttribute.eMesh:
-            mesh = extract_mesh_from_node(node)
-            mesh_list.append(mesh)
-    for i in range(node.GetChildCount()):
-        extract_mesh_list_from_hierarchy(node.GetChild(i), mesh_list)
-
-def extract_mesh_list_from_scene(scene):
-    mesh_list = []
-    node = scene.GetRootNode()
-    if node:
-        for i in range(node.GetChildCount()):
-            extract_mesh_list_from_hierarchy(node.GetChild(i), mesh_list)
-    return mesh_list
+    return TEMPLATE_MESH % mesh
 
 # #####################################################
 # Parse - Objects 
 # #####################################################
 def extract_mesh_object_from_node(node):
+    name = node.GetName()
     transform = node.EvaluateGlobalTransform()
     translation = generate_vec3(transform.GetT())
     scale = generate_vec3(transform.GetS())
@@ -459,22 +491,21 @@ def extract_mesh_object_from_node(node):
     rotationq = generate_vec4(transform.GetQ())
 
     object_info = {
-      "object_id": node.GetName(),
-      "geometry_id": "",
+      "object_id": name,
+      "geometry_id": "geo_" + name,
       "group_id": "",
       "material_id": "",
       "position": translation,
       "rotation": rotation,
       "quaternion": rotationq,
       "scale": scale,
-      "visible": "",
-      "castShadow": "",
-      "receiveShadow": "",
-      "doubleSided": ""
+      "visible": generate_bool_property(True),
+      "castShadow": generate_bool_property(False),
+      "receiveShadow": generate_bool_property(False),
+      "doubleSided": generate_bool_property(False),
     }
 
     return TEMPLATE_OBJECT % object_info
-
 
 def extract_scene_object_list_from_hierarchy(node, scene_object_list):
     if node.GetNodeAttribute() == None:
@@ -496,36 +527,134 @@ def extract_scene_object_list_from_scene(scene):
     return scene_object_list
 
 # #####################################################
-# Parse - Scene 
+# Parse - Geometries 
 # #####################################################
-#(fname)s,
-#(nobjects)s,
-#(ngeometries)s,
-#(nmaterials)s,
-#(ntextures)s
-#(position)s,
-#(rotation)s,
-#(scale)s
-#(bgcolor)s,
-#(bgalpha)f,
-#(defcamera)s
-#(basetype)s,
-#(sections)s
-def extract_scene(scene, filename):
-    scene_object_list = extract_scene_object_list_from_scene(scene)
-    mesh_list = extract_mesh_list_from_scene(scene)
-    
-    scene_info = {
-      "fname": filename, 
-      "nobjects": len(scene_object_list),
-      
+def extract_geometry_from_node(node):
+    name = node.GetName()
+
+    geometry_info = {
+      "geometry_id": generate_string("geo_" + name),
+      "embed_id":  generate_string("emb_" + name),
     }
 
-    print(scene_info)
+    return TEMPLATE_GEOMETRY_EMBED % geometry_info
+
+def extract_scene_geometry_list_from_hierarchy(node, scene_geometry_list):
+    if node.GetNodeAttribute() == None:
+        print("NULL Node Attribute\n")
+    else:
+        lAttributeType = (node.GetNodeAttribute().GetAttributeType())
+        if lAttributeType == FbxNodeAttribute.eMesh:
+            scene_geometry = extract_geometry_from_node(node)
+            scene_geometry_list.append(scene_geometry)
+    for i in range(node.GetChildCount()):
+        extract_scene_geometry_list_from_hierarchy(node.GetChild(i), scene_geometry_list)
+
+def extract_scene_geometry_list_from_scene(scene):
+    scene_geometry_list = []
+    node = scene.GetRootNode()
+    if node:
+        for i in range(node.GetChildCount()):
+            extract_scene_geometry_list_from_hierarchy(node.GetChild(i), scene_geometry_list)
+    return scene_geometry_list
+
+# #####################################################
+# Parse - Embeds 
+# #####################################################
+def extract_embed_from_node(node):
+    mesh = extract_mesh_from_node(node)
+    name = node.GetName()
+
+    embed_info = {
+      "embed_id": "emb_" + name,
+      "embed": mesh
+    }
+
+    return TEMPLATE_MESH_EMBED % embed_info
+
+def extract_scene_embed_list_from_hierarchy(node, scene_embed_list):
+    if node.GetNodeAttribute() == None:
+        print("NULL Node Attribute\n")
+    else:
+        lAttributeType = (node.GetNodeAttribute().GetAttributeType())
+        if lAttributeType == FbxNodeAttribute.eMesh:
+            scene_embed = extract_embed_from_node(node)
+            scene_embed_list.append(scene_embed)
+    for i in range(node.GetChildCount()):
+        extract_scene_embed_list_from_hierarchy(node.GetChild(i), scene_embed_list)
+
+def extract_scene_embed_list_from_scene(scene):
+    scene_embed_list = []
+    node = scene.GetRootNode()
+    if node:
+        for i in range(node.GetChildCount()):
+            extract_scene_embed_list_from_hierarchy(node.GetChild(i), scene_embed_list)
+    return scene_embed_list
+
+# #####################################################
+# Parse - Scene 
+# #####################################################
+def extract_scene(scene, filename):
+    objects = extract_scene_object_list_from_scene(scene)
+    geometries = extract_scene_geometry_list_from_scene(scene)
+    embeds = extract_scene_embed_list_from_scene(scene)
+    textures = []
+    materials = []
+    cameras = []
+    lights = []
+
+    nobjects = len(objects)
+    ngeometries = len(geometries)
+    nembeds = len(embeds)
+    ntextures = len(textures)
+    nmaterials = len(materials)
+    ncameras = len(cameras)
+    nlights = len(lights)
+
+    basetype = "relativeToScene"
+
+    sections = [
+    ["objects",    ",\n".join(objects)],
+    ["geometries", ",\n".join(geometries)],
+    ["textures",   ",\n".join(textures)],
+    ["materials",  ",\n".join(materials)],
+    ["cameras",    ",\n".join(cameras)],
+    ["lights",     ",\n".join(lights)],
+    ["embeds",     ",\n".join(embeds)]
+    ]
+
+    chunks = []
+    for label, content in sections:
+        if content:
+            chunks.append(generate_section(label, content))
+
+    sections_string = "\n".join(chunks)
+
+    default_camera = "default_camera"
     
-    output = ""
-    output += "".join(mesh_list)
-    return output
+    parameters = {
+    "fname": generate_string(filename), 
+
+    "sections"  : sections_string,
+
+    "bgcolor"   : generate_vec3(DEFAULTS["bgcolor"]),
+    "bgalpha"   : DEFAULTS["bgalpha"],
+    "defcamera" :  generate_string(default_camera),
+
+    "nobjects"      : nobjects,
+    "ngeometries"   : ngeometries,
+    "ntextures"     : ntextures,
+    "basetype"      : generate_string(basetype),
+    "nmaterials"    : nmaterials,
+
+    "position"      : generate_vec3(DEFAULTS["position"]),
+    "rotation"      : generate_vec3(DEFAULTS["rotation"]),
+    "scale"         : generate_vec3(DEFAULTS["scale"])
+    }
+
+    text = TEMPLATE_SCENE_ASCII % parameters
+    
+    return text
 
 # #####################################################
 # helpers
@@ -560,7 +689,7 @@ if __name__ == "__main__":
 
     # The converter takes an FBX file as an argument.
     if len(sys.argv) > 2:
-        print("\n\nFile: %s\n" % sys.argv[1])
+        print("\n\nLoading file: %s\n" % sys.argv[1])
         result = LoadScene(sdk_manager, scene, sys.argv[1])
     else:
         result = False
@@ -572,7 +701,7 @@ if __name__ == "__main__":
         output_content = extract_scene(scene, os.path.basename(sys.argv[1]))
         output_path = os.path.join(os.getcwd(), sys.argv[2])
         write_file(output_path, output_content)
-        print("\n\nExported Three.js file to:\n%s\n" % output_path)
+        print("\nExported Three.js file to:\n%s\n" % output_path)
 
     # Destroy all objects created by the FBX SDK.
     sdk_manager.Destroy()
