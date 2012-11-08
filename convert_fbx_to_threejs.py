@@ -712,6 +712,82 @@ def extract_scene_material_list_from_scene(scene):
     return scene_material_list
 
 # #####################################################
+# Parse - Textures 
+# #####################################################
+def FindAndDisplayTextureInfoByProperty(material_property, pDisplayHeader, material_index):
+    if material_property.IsValid():
+        #Here we have to check if it's layeredtextures, or just textures:
+        layered_texture_count = material_property.GetSrcObjectCount(FbxLayeredTexture.ClassId)
+        if layered_texture_count > 0:
+            for j in range(layered_texture_count):
+                layered_texture = material_property.GetSrcObject(FbxLayeredTexture.ClassId, j)
+                texture_count = layered_texture.GetSrcObjectCount(FbxTexture.ClassId)
+                for k in range(texture_count):
+                    texture = layered_texture.GetSrcObject(FbxTexture.ClassId,k)
+                    if texture:
+                        print("    Textures connected to Material "+ str(material_index))
+
+                        # NOTE the blend mode is ALWAYS on the LayeredTexture and NOT the one on the texture.
+                        # Why is that?  because one texture can be shared on different layered textures and might
+                        # have different blend modes.
+
+#                        lBlendMode = layered_texture.GetTextureBlendMode(k)
+                        print("    Textures for "+ str(material_property.GetName()))
+                        print("    "+ texture.GetFileName())
+#                        DisplayInt("        Texture ", k)  
+#                        DisplayTextureInfo(texture, lBlendMode)
+        else:
+            # no layered texture simply get on the property
+            texture_count = material_property.GetSrcObjectCount(FbxTexture.ClassId)
+            for j in range(texture_count):
+                texture = material_property.GetSrcObject(FbxTexture.ClassId,j)
+                if texture:
+                    # display connectMareial header only at the first time
+                    print("    Textures connected to Material "+ str(material_index))
+                    
+                    print("    Textures for "+ str(material_property.GetName().Buffer()))
+                    print("    "+ texture.GetFileName())
+#                    DisplayInt("        Texture ", j)  
+#                    DisplayTextureInfo(texture, -1)
+
+        texture_count = material_property.GetSrcObjectCount(FbxTexture.ClassId)
+        for texture_index in range(texture_count):
+            texture = material_property.GetSrcObject(FbxTexture.ClassId, texture_index) 
+
+def extract_textures_from_node(node, scene_texture_list):
+    name = node.GetName()
+    mesh = node.GetNodeAttribute()
+
+    material_count = mesh.GetNode().GetSrcObjectCount(FbxSurfaceMaterial.ClassId)
+    for i in range(material_count):
+        material = mesh.GetNode().GetSrcObject(FbxSurfaceMaterial.ClassId, i)
+
+        #go through all the possible textures
+        if material:            
+            texture_count = FbxLayerElement.sTypeTextureCount()
+            for j in range(texture_count):
+                material_property = material.FindProperty(FbxLayerElement.sTextureChannelNames(j))
+                FindAndDisplayTextureInfoByProperty(material_property, True, i)
+
+def extract_scene_texture_list_from_hierarchy(node, scene_texture_list):
+    if node.GetNodeAttribute() == None:
+        print("NULL Node Attribute\n")
+    else:
+        attribute_type = (node.GetNodeAttribute().GetAttributeType())
+        if attribute_type == FbxNodeAttribute.eMesh:
+            extract_textures_from_node(node, scene_texture_list)
+    for i in range(node.GetChildCount()):
+        extract_scene_texture_list_from_hierarchy(node.GetChild(i), scene_texture_list)
+
+def extract_scene_texture_list_from_scene(scene):
+    scene_texture_list = []
+    node = scene.GetRootNode()
+    if node:
+        for i in range(node.GetChildCount()):
+            extract_scene_texture_list_from_hierarchy(node.GetChild(i), scene_texture_list)
+    return scene_texture_list
+
+# #####################################################
 # Parse - Lights 
 # #####################################################
 def extract_light_from_node(node):
@@ -843,7 +919,7 @@ def extract_scene(scene, filename):
     objects = extract_scene_object_list_from_scene(scene)
     geometries = extract_scene_geometry_list_from_scene(scene)
     embeds = extract_scene_embed_list_from_scene(scene)
-    textures = []
+    textures = extract_scene_texture_list_from_scene(scene)
     materials = extract_scene_material_list_from_scene(scene)
     cameras = extract_scene_camera_list_from_scene(scene)
     lights = extract_scene_light_list_from_scene(scene)
