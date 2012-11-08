@@ -62,6 +62,7 @@ TEMPLATE_SCENE_ASCII = """\
     "textures"      : %(ntextures)s,
     "cameras"       : %(ncameras)s,
     "lights"        : %(nlights)s
+    "type"          : "scene",
 },
 
 "type" : "scene",
@@ -254,7 +255,7 @@ def generate_string(s):
     return TEMPLATE_STRING % s
 
 def generate_color(rgb):
-    color = (int(rgb[0]*255) << 16) + (int(rgb[1]*255) << 8) + int(rgb[2]*255);
+    color = (int(rgb[0]*255) << 16) + (int(rgb[1]*255) << 8) + int(rgb[2]*255)
     return color
     
 def generate_rotation(v):
@@ -448,6 +449,8 @@ def extract_mesh_from_node(node):
     uvs = extract_vertex_uvs(mesh)
     colors = []
     materials = []
+    uvs = []
+    normals = []
     option_normals = len(normals) > 0
     option_colors = len(colors) > 0
     option_uv_coords = len(uvs) > 0
@@ -461,7 +464,7 @@ def extract_mesh_from_node(node):
       "nface"         : len(faces),
       "nnormal"       : len(normals),
       "ncolor"        : len(colors),
-      "nuvs"           : [len(uvs)],
+      "nuvs"           : len(uvs),
       "nmaterial"     : 0,
       "nmorphTarget"  : 0,
       "nbone"         : 0
@@ -598,6 +601,117 @@ def extract_scene_embed_list_from_scene(scene):
     return scene_embed_list
 
 # #####################################################
+# Parse - Material 
+# #####################################################
+def generate_material_string(material):
+    material_id = material.GetName()
+
+    type_map = {
+    "Lambert"   : "MeshLambertMaterial",
+    "Phong"     : "MeshPhongMaterial"
+    }
+
+    fbxColor = FbxColor()
+
+    #Get the implementation to see if it's a hardware shader.
+    implementation = GetImplementation(material, "ImplementationHLSL")
+    implementation_type = "HLSL"
+    if not implementation:
+        implementation = GetImplementation(material, "ImplementationCGFX")
+        implementation_type = "CGFX"
+
+    if implementation:
+        # This material is a hardware shader, skip it
+        material_info["hardware_shader_type"] = implementation_type.Buffer()
+
+    elif (material.GetClassId().Is(FbxSurfacePhong.ClassId)):
+        # We found a Phong material.  
+        material_type = "Phong"
+        ambient   = generate_color(material.Ambient.Get())
+        diffuse   = generate_color(material.Diffuse.Get())
+        specular  = generate_color(material.Specular.Get())
+        emissive  = generate_color(material.Emissive.Get())
+        transparency = 1.0 - material.TransparencyFactor.Get()
+        shininess = material.Shininess.Get()
+        reflectivity = generate_vec3(material.Reflection.Get())
+        
+        parameters = '"color": %d' % diffuse
+        parameters += ', "opacity": %.2g' % transparency
+        parameters += ', "ambient": %d' % ambient
+        parameters += ', "specular": %d' % specular
+        parameters += ', "shininess": %.1g' % shininess
+
+        material_info = {
+        "material_id" : generate_string(material_id),
+        "type"        : generate_string(type_map[material_type]),
+        "parameters"  : parameters
+        }
+
+        return TEMPLATE_MATERIAL_SCENE % material_info
+
+    elif material.GetClassId().Is(FbxSurfaceLambert.ClassId):
+        # We found a Lambert material. Display its properties.
+        material_type = "Lambert"
+        ambient   = generate_color(material.Ambient.Get())
+        diffuse   = generate_color(material.Diffuse.Get())
+        emissive  = generate_color(material.Emissive.Get())
+        transparency = 1.0 - material.TransparencyFactor.Get()
+        
+        parameters = '"color": %d' % diffuse
+        parameters += ', "opacity": %.2g' % transparency
+        parameters += ', "ambient": %d' % ambient
+
+        material_info = {
+        "material_id" : generate_string(material_id),
+        "type"        : generate_string(type_map[material_type]),
+        "parameters"  : parameters
+        }
+
+        return TEMPLATE_MATERIAL_SCENE % material_info
+
+    print("Unknown type of Material")
+    return ""
+
+def extract_materials_from_node(node, scene_material_list):
+    name = node.GetName()
+    mesh = node.GetNodeAttribute()
+
+    node = None
+    if mesh:
+        node = mesh.GetNode()
+        if node:
+            material_count = node.GetMaterialCount()
+
+    for l in range(mesh.GetLayerCount()):
+        materials = mesh.GetLayer(l).GetMaterials()
+        if materials:
+            if materials.GetReferenceMode() == FbxLayerElement.eIndex:
+                #Materials are in an undefined external table
+                continue
+            for i in range(material_count):
+                material = node.GetMaterial(i)
+                scene_material = generate_material_string(material)
+                scene_material_list.append(scene_material)
+
+def extract_scene_material_list_from_hierarchy(node, scene_material_list):
+    if node.GetNodeAttribute() == None:
+        print("NULL Node Attribute\n")
+    else:
+        attribute_type = (node.GetNodeAttribute().GetAttributeType())
+        if attribute_type == FbxNodeAttribute.eMesh:
+            extract_materials_from_node(node, scene_material_list)
+    for i in range(node.GetChildCount()):
+        extract_scene_material_list_from_hierarchy(node.GetChild(i), scene_material_list)
+
+def extract_scene_material_list_from_scene(scene):
+    scene_material_list = []
+    node = scene.GetRootNode()
+    if node:
+        for i in range(node.GetChildCount()):
+            extract_scene_material_list_from_hierarchy(node.GetChild(i), scene_material_list)
+    return scene_material_list
+
+# #####################################################
 # Parse - Lights 
 # #####################################################
 def extract_light_from_node(node):
@@ -730,7 +844,7 @@ def extract_scene(scene, filename):
     geometries = extract_scene_geometry_list_from_scene(scene)
     embeds = extract_scene_embed_list_from_scene(scene)
     textures = []
-    materials = []
+    materials = extract_scene_material_list_from_scene(scene)
     cameras = extract_scene_camera_list_from_scene(scene)
     lights = extract_scene_light_list_from_scene(scene)
 
