@@ -17,7 +17,7 @@ DEFAULTS = {
 "camera"  :
     {
         "name" : "default_camera",
-        "type" : "perspective",
+        "type" : "PerspectiveCamera",
         "near" : 1,
         "far"  : 10000,
         "fov"  : 60,
@@ -65,7 +65,6 @@ TEMPLATE_SCENE_ASCII = """\
     "type"          : "scene",
 },
 
-"type" : "scene",
 "urlBaseType" : %(basetype)s,
 
 %(sections)s
@@ -132,7 +131,7 @@ TEMPLATE_OBJECT = """\
     "%(object_id)s" : {
         "geometry"  : "%(geometry_id)s",
         "groups"    : [ %(group_id)s ],
-        "materials" : [ %(material_id)s ],
+        "materials" : [ %(materials)s ],
         "position"  : %(position)s,
         "rotation"  : %(rotation)s,
         "quaternion": %(quaternion)s,
@@ -154,7 +153,7 @@ TEMPLATE_EMPTY = """\
 
 TEMPLATE_GEOMETRY_EMBED = """\
     %(geometry_id)s : {
-        "type" : "embedded_mesh",
+        "type" : "embedded",
         "id"  : %(embed_id)s
     }"""
 
@@ -171,7 +170,7 @@ TEMPLATE_MATERIAL_SCENE = """\
 
 TEMPLATE_CAMERA_PERSPECTIVE = """\
     %(camera_id)s : {
-        "type"  : "perspective",
+        "type"  : "PerspectiveCamera",
         "fov"   : %(fov)f,
         "aspect": %(aspect)f,
         "near"  : %(near)f,
@@ -182,7 +181,7 @@ TEMPLATE_CAMERA_PERSPECTIVE = """\
 
 TEMPLATE_CAMERA_ORTHO = """\
     %(camera_id)s: {
-        "type"  : "ortho",
+        "type"  : "OrthographicCamera",
         "left"  : %(left)f,
         "right" : %(right)f,
         "top"   : %(top)f,
@@ -195,7 +194,7 @@ TEMPLATE_CAMERA_ORTHO = """\
 
 TEMPLATE_LIGHT_DIRECTIONAL = """\
     %(light_id)s: {
-        "type"       : "directional",
+        "type"       : "DirectionalLight",
         "direction"  : %(direction)s,
         "color"    : %(color)d,
         "intensity"  : %(intensity).2f
@@ -203,7 +202,7 @@ TEMPLATE_LIGHT_DIRECTIONAL = """\
 
 TEMPLATE_LIGHT_POINT = """\
     %(light_id)s: {
-        "type"       : "point",
+        "type"       : "PointLight",
         "position"   : %(position)s,
         "color"      : %(color)d,
         "intensity"  : %(intensity).3f
@@ -442,13 +441,33 @@ def extract_mesh_faces(mesh, option_normals, option_colors, option_uv_coords, op
         faces.append(face)
     return faces
 
+def extract_mesh_materials(mesh):
+    material_list = []
+    node = None
+    if mesh:
+        node = mesh.GetNode()
+        if node:
+            material_count = node.GetMaterialCount()
+
+    for l in range(mesh.GetLayerCount()):
+        materials = mesh.GetLayer(l).GetMaterials()
+        if materials:
+            if materials.GetReferenceMode() == FbxLayerElement.eIndex:
+                #Materials are in an undefined external table
+                continue
+            for i in range(material_count):
+                material = node.GetMaterial(i)
+                material_list.append(material.GetName())
+
+    return material_list
+
 def extract_mesh_from_node(node):
     mesh = node.GetNodeAttribute()
     positions = extract_vertex_positions(mesh)
     normals = extract_vertex_normals(mesh)
     uvs = extract_vertex_uvs(mesh)
+    materials = extract_mesh_materials(mesh)
     colors = []
-    materials = []
     uvs = []
     normals = []
     option_normals = len(normals) > 0
@@ -493,17 +512,20 @@ def extract_mesh_from_node(node):
 # #####################################################
 def extract_mesh_object_from_node(node):
     name = node.GetName()
+    mesh = node.GetNodeAttribute()
+
     transform = node.EvaluateGlobalTransform()
     translation = generate_vec3(transform.GetT())
     scale = generate_vec3(transform.GetS())
     rotation = generate_rotation(transform.GetR())
     rotationq = generate_vec4(transform.GetQ())
+    materials = extract_mesh_materials(mesh)
 
     object_info = {
       "object_id": name,
       "geometry_id": "geo_" + name,
       "group_id": "",
-      "material_id": "",
+      "materials": ",".join(generate_string(m) for m in materials),
       "position": translation,
       "rotation": rotation,
       "quaternion": rotationq,
@@ -516,7 +538,7 @@ def extract_mesh_object_from_node(node):
 
     return TEMPLATE_OBJECT % object_info
 
-def extract_scene_object_list_from_hierarchy(node, scene_object_list):
+def generate_scene_object_list_from_hierarchy(node, scene_object_list):
     if node.GetNodeAttribute() == None:
         print("NULL Node Attribute\n")
     else:
@@ -525,14 +547,14 @@ def extract_scene_object_list_from_hierarchy(node, scene_object_list):
             scene_object = extract_mesh_object_from_node(node)
             scene_object_list.append(scene_object)
     for i in range(node.GetChildCount()):
-        extract_scene_object_list_from_hierarchy(node.GetChild(i), scene_object_list)
+        generate_scene_object_list_from_hierarchy(node.GetChild(i), scene_object_list)
 
-def extract_scene_object_list_from_scene(scene):
+def generate_scene_object_list(scene):
     scene_object_list = []
     node = scene.GetRootNode()
     if node:
         for i in range(node.GetChildCount()):
-            extract_scene_object_list_from_hierarchy(node.GetChild(i), scene_object_list)
+            generate_scene_object_list_from_hierarchy(node.GetChild(i), scene_object_list)
     return scene_object_list
 
 # #####################################################
@@ -548,7 +570,7 @@ def extract_geometry_from_node(node):
 
     return TEMPLATE_GEOMETRY_EMBED % geometry_info
 
-def extract_scene_geometry_list_from_hierarchy(node, scene_geometry_list):
+def generate_scene_geometry_list_from_hierarchy(node, scene_geometry_list):
     if node.GetNodeAttribute() == None:
         print("NULL Node Attribute\n")
     else:
@@ -557,14 +579,14 @@ def extract_scene_geometry_list_from_hierarchy(node, scene_geometry_list):
             scene_geometry = extract_geometry_from_node(node)
             scene_geometry_list.append(scene_geometry)
     for i in range(node.GetChildCount()):
-        extract_scene_geometry_list_from_hierarchy(node.GetChild(i), scene_geometry_list)
+        generate_scene_geometry_list_from_hierarchy(node.GetChild(i), scene_geometry_list)
 
-def extract_scene_geometry_list_from_scene(scene):
+def generate_scene_geometry_list(scene):
     scene_geometry_list = []
     node = scene.GetRootNode()
     if node:
         for i in range(node.GetChildCount()):
-            extract_scene_geometry_list_from_hierarchy(node.GetChild(i), scene_geometry_list)
+            generate_scene_geometry_list_from_hierarchy(node.GetChild(i), scene_geometry_list)
     return scene_geometry_list
 
 # #####################################################
@@ -581,7 +603,7 @@ def extract_embed_from_node(node):
 
     return TEMPLATE_MESH_EMBED % embed_info
 
-def extract_scene_embed_list_from_hierarchy(node, scene_embed_list):
+def generate_scene_embed_list_from_hierarchy(node, scene_embed_list):
     if node.GetNodeAttribute() == None:
         print("NULL Node Attribute\n")
     else:
@@ -590,14 +612,14 @@ def extract_scene_embed_list_from_hierarchy(node, scene_embed_list):
             scene_embed = extract_embed_from_node(node)
             scene_embed_list.append(scene_embed)
     for i in range(node.GetChildCount()):
-        extract_scene_embed_list_from_hierarchy(node.GetChild(i), scene_embed_list)
+        generate_scene_embed_list_from_hierarchy(node.GetChild(i), scene_embed_list)
 
-def extract_scene_embed_list_from_scene(scene):
+def generate_scene_embed_list(scene):
     scene_embed_list = []
     node = scene.GetRootNode()
     if node:
         for i in range(node.GetChildCount()):
-            extract_scene_embed_list_from_hierarchy(node.GetChild(i), scene_embed_list)
+            generate_scene_embed_list_from_hierarchy(node.GetChild(i), scene_embed_list)
     return scene_embed_list
 
 # #####################################################
@@ -693,7 +715,7 @@ def extract_materials_from_node(node, scene_material_list):
                 scene_material = generate_material_string(material)
                 scene_material_list.append(scene_material)
 
-def extract_scene_material_list_from_hierarchy(node, scene_material_list):
+def generate_scene_material_list_from_hierarchy(node, scene_material_list):
     if node.GetNodeAttribute() == None:
         print("NULL Node Attribute\n")
     else:
@@ -701,20 +723,20 @@ def extract_scene_material_list_from_hierarchy(node, scene_material_list):
         if attribute_type == FbxNodeAttribute.eMesh:
             extract_materials_from_node(node, scene_material_list)
     for i in range(node.GetChildCount()):
-        extract_scene_material_list_from_hierarchy(node.GetChild(i), scene_material_list)
+        generate_scene_material_list_from_hierarchy(node.GetChild(i), scene_material_list)
 
-def extract_scene_material_list_from_scene(scene):
+def generate_scene_material_list(scene):
     scene_material_list = []
     node = scene.GetRootNode()
     if node:
         for i in range(node.GetChildCount()):
-            extract_scene_material_list_from_hierarchy(node.GetChild(i), scene_material_list)
+            generate_scene_material_list_from_hierarchy(node.GetChild(i), scene_material_list)
     return scene_material_list
 
 # #####################################################
 # Parse - Textures 
 # #####################################################
-def FindAndDisplayTextureInfoByProperty(material_property, pDisplayHeader, material_index):
+def FindAndDisplayTextureInfoByProperty(material_property, material_index):
     if material_property.IsValid():
         #Here we have to check if it's layeredtextures, or just textures:
         layered_texture_count = material_property.GetSrcObjectCount(FbxLayeredTexture.ClassId)
@@ -757,19 +779,20 @@ def FindAndDisplayTextureInfoByProperty(material_property, pDisplayHeader, mater
 def extract_textures_from_node(node, scene_texture_list):
     name = node.GetName()
     mesh = node.GetNodeAttribute()
-
+    
+    #for all materials attached to this mesh
     material_count = mesh.GetNode().GetSrcObjectCount(FbxSurfaceMaterial.ClassId)
-    for i in range(material_count):
-        material = mesh.GetNode().GetSrcObject(FbxSurfaceMaterial.ClassId, i)
+    for material_index in range(material_count):
+        material = mesh.GetNode().GetSrcObject(FbxSurfaceMaterial.ClassId, material_index)
 
-        #go through all the possible textures
+        #go through all the possible textures types
         if material:            
             texture_count = FbxLayerElement.sTypeTextureCount()
-            for j in range(texture_count):
-                material_property = material.FindProperty(FbxLayerElement.sTextureChannelNames(j))
-                FindAndDisplayTextureInfoByProperty(material_property, True, i)
+            for texture_index in range(texture_count):
+                material_property = material.FindProperty(FbxLayerElement.sTextureChannelNames(texture_index))
+                FindAndDisplayTextureInfoByProperty(material_property, material_index)
 
-def extract_scene_texture_list_from_hierarchy(node, scene_texture_list):
+def generate_scene_texture_list_from_hierarchy(node, scene_texture_list):
     if node.GetNodeAttribute() == None:
         print("NULL Node Attribute\n")
     else:
@@ -777,14 +800,14 @@ def extract_scene_texture_list_from_hierarchy(node, scene_texture_list):
         if attribute_type == FbxNodeAttribute.eMesh:
             extract_textures_from_node(node, scene_texture_list)
     for i in range(node.GetChildCount()):
-        extract_scene_texture_list_from_hierarchy(node.GetChild(i), scene_texture_list)
+        generate_scene_texture_list_from_hierarchy(node.GetChild(i), scene_texture_list)
 
-def extract_scene_texture_list_from_scene(scene):
+def generate_scene_texture_list(scene):
     scene_texture_list = []
     node = scene.GetRootNode()
     if node:
         for i in range(node.GetChildCount()):
-            extract_scene_texture_list_from_hierarchy(node.GetChild(i), scene_texture_list)
+            generate_scene_texture_list_from_hierarchy(node.GetChild(i), scene_texture_list)
     return scene_texture_list
 
 # #####################################################
@@ -820,7 +843,7 @@ def extract_light_from_node(node):
 
     return light_string
 
-def extract_scene_light_list_from_hierarchy(node, scene_light_list):
+def generate_scene_light_list_from_hierarchy(node, scene_light_list):
     if node.GetNodeAttribute() == None:
         print("NULL Node Attribute\n")
     else:
@@ -829,19 +852,40 @@ def extract_scene_light_list_from_hierarchy(node, scene_light_list):
             scene_light = extract_light_from_node(node)
             scene_light_list.append(scene_light)
     for i in range(node.GetChildCount()):
-        extract_scene_light_list_from_hierarchy(node.GetChild(i), scene_light_list)
+        generate_scene_light_list_from_hierarchy(node.GetChild(i), scene_light_list)
 
-def extract_scene_light_list_from_scene(scene):
+def generate_scene_light_list(scene):
     scene_light_list = []
     node = scene.GetRootNode()
     if node:
         for i in range(node.GetChildCount()):
-            extract_scene_light_list_from_hierarchy(node.GetChild(i), scene_light_list)
+            generate_scene_light_list_from_hierarchy(node.GetChild(i), scene_light_list)
     return scene_light_list
 
 # #####################################################
 # Parse - Cameras 
 # #####################################################
+def generate_default_camera():
+    camera = DEFAULTS["camera"]
+    fov = camera["fov"]
+    aspect = camera["aspect"]
+    near = camera["near"]
+    far = camera["far"]
+    position = camera["position"]
+    target = camera["target"]
+
+    camera_string = TEMPLATE_CAMERA_PERSPECTIVE % {
+    "camera_id" : generate_string(camera["name"]),
+    "fov"       : fov,
+    "aspect"    : aspect,
+    "near"      : near,
+    "far"       : far,
+    "position"  : position,
+    "target"    : target
+    }
+
+    return camera_string
+
 def extract_camera_from_node(node):
     name = node.GetName()
     camera = node.GetNodeAttribute()
@@ -893,7 +937,7 @@ def extract_camera_from_node(node):
 
     return camera_string
 
-def extract_scene_camera_list_from_hierarchy(node, scene_camera_list):
+def generate_scene_camera_list_from_hierarchy(node, scene_camera_list):
     if node.GetNodeAttribute() == None:
         print("NULL Node Attribute\n")
     else:
@@ -902,27 +946,30 @@ def extract_scene_camera_list_from_hierarchy(node, scene_camera_list):
             scene_camera = extract_camera_from_node(node)
             scene_camera_list.append(scene_camera)
     for i in range(node.GetChildCount()):
-        extract_scene_camera_list_from_hierarchy(node.GetChild(i), scene_camera_list)
+        generate_scene_camera_list_from_hierarchy(node.GetChild(i), scene_camera_list)
 
-def extract_scene_camera_list_from_scene(scene):
+def generate_scene_camera_list(scene):
     scene_camera_list = []
     node = scene.GetRootNode()
     if node:
         for i in range(node.GetChildCount()):
-            extract_scene_camera_list_from_hierarchy(node.GetChild(i), scene_camera_list)
+            generate_scene_camera_list_from_hierarchy(node.GetChild(i), scene_camera_list)
     return scene_camera_list
 
 # #####################################################
 # Parse - Scene 
 # #####################################################
 def extract_scene(scene, filename):
-    objects = extract_scene_object_list_from_scene(scene)
-    geometries = extract_scene_geometry_list_from_scene(scene)
-    embeds = extract_scene_embed_list_from_scene(scene)
-    textures = extract_scene_texture_list_from_scene(scene)
-    materials = extract_scene_material_list_from_scene(scene)
-    cameras = extract_scene_camera_list_from_scene(scene)
-    lights = extract_scene_light_list_from_scene(scene)
+    geometries = generate_scene_geometry_list(scene)
+    embeds = generate_scene_embed_list(scene)
+    textures = generate_scene_texture_list(scene)
+    materials = generate_scene_material_list(scene)
+    objects = generate_scene_object_list(scene)
+    cameras = generate_scene_camera_list(scene)
+    lights = generate_scene_light_list(scene)
+
+    if len(cameras) <= 0:
+        cameras = [generate_default_camera()]
 
     nobjects = len(objects)
     ngeometries = len(geometries)
@@ -935,12 +982,10 @@ def extract_scene(scene, filename):
     basetype = "relativeToScene"
 
     sections = [
-    ["objects",    ",\n".join(objects)],
+    ["objects",    ",\n".join(objects + cameras + lights)],
     ["geometries", ",\n".join(geometries)],
     ["textures",   ",\n".join(textures)],
     ["materials",  ",\n".join(materials)],
-    ["cameras",    ",\n".join(cameras)],
-    ["lights",     ",\n".join(lights)],
     ["embeds",     ",\n".join(embeds)]
     ]
 
@@ -951,8 +996,6 @@ def extract_scene(scene, filename):
 
     sections_string = "\n".join(chunks)
 
-    default_camera = "default_camera"
-    
     parameters = {
     "fname": generate_string(filename), 
 
@@ -960,7 +1003,7 @@ def extract_scene(scene, filename):
 
     "bgcolor"   : generate_vec3(DEFAULTS["bgcolor"]),
     "bgalpha"   : DEFAULTS["bgalpha"],
-    "defcamera" :  generate_string(default_camera),
+    "defcamera" : "",
 
     "nobjects"      : nobjects,
     "ngeometries"   : ngeometries,
