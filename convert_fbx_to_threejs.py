@@ -1003,7 +1003,7 @@ def extract_scene(scene, filename):
 
     "bgcolor"   : generate_vec3(DEFAULTS["bgcolor"]),
     "bgalpha"   : DEFAULTS["bgalpha"],
-    "defcamera" : "",
+    "defcamera" : "default_camera",
 
     "nobjects"      : nobjects,
     "ngeometries"   : ngeometries,
