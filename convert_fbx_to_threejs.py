@@ -881,7 +881,7 @@ def generate_scene_material_list(scene):
 # #####################################################
 # Parse - Textures 
 # #####################################################
-def FindAndDisplayTextureInfoByProperty(material_property, material_index):
+def extract_material_textures(material_property, material_index, scene_texture_list):
     if material_property.IsValid():
         #Here we have to check if it's layeredtextures, or just textures:
         layered_texture_count = material_property.GetSrcObjectCount(FbxLayeredTexture.ClassId)
@@ -892,35 +892,59 @@ def FindAndDisplayTextureInfoByProperty(material_property, material_index):
                 for k in range(texture_count):
                     texture = layered_texture.GetSrcObject(FbxTexture.ClassId,k)
                     if texture:
-                        print("    Textures connected to Material "+ str(material_index))
-
                         # NOTE the blend mode is ALWAYS on the LayeredTexture and NOT the one on the texture.
                         # Why is that?  because one texture can be shared on different layered textures and might
                         # have different blend modes.
 
-#                        lBlendMode = layered_texture.GetTextureBlendMode(k)
-                        print("    Textures for "+ str(material_property.GetName()))
-                        print("    "+ texture.GetFileName())
-#                        DisplayInt("        Texture ", k)  
-#                        DisplayTextureInfo(texture, lBlendMode)
+                        texture_file = texture.GetFileName()
+                        texture_id = os.path.splitext(os.path.basename(texture_file))[0]
+                        wrap_u = texture.GetWrapModeU()
+                        wrap_v = texture.GetWrapModeV()
+                        offset = texture.GetUVTranslation()
+                        
+                        #TODO: read extra values from the actual textures
+                        extras = ""
+                        extras += ',\n        "repeat": [%d, %d]' % (1, 1)
+                        extras += ',\n        "offset": [%d, %d]' % (0, 0)
+                        extras += ',\n        "magFilter": "%s"' % "LinearFilter"
+                        extras += ',\n        "minFilter": "%s"' % "LinearMipMapLinearFilter"
+                        extras += ',\n        "anisotropy": %d' % 1
+
+                        texture_string = TEMPLATE_TEXTURE % {
+                        "texture_id"   : generate_string(texture_id),
+                        "texture_file" : generate_string(texture_file),
+                        "extras"       : extras
+                        }
+
+                        scene_texture_list.append(texture_string)
         else:
             # no layered texture simply get on the property
             texture_count = material_property.GetSrcObjectCount(FbxTexture.ClassId)
             for j in range(texture_count):
                 texture = material_property.GetSrcObject(FbxTexture.ClassId,j)
                 if texture:
-                    # display connectMareial header only at the first time
-                    print("    Textures connected to Material "+ str(material_index))
+                    texture_file = texture.GetFileName()
+                    texture_id = os.path.splitext(os.path.basename(texture_file))[0]
+                    wrap_u = texture.GetWrapModeU()
+                    wrap_v = texture.GetWrapModeV()
+                    offset = texture.GetUVTranslation()
                     
-                    print("    Textures for "+ str(material_property.GetName().Buffer()))
-                    print("    "+ texture.GetFileName())
-#                    DisplayInt("        Texture ", j)  
-#                    DisplayTextureInfo(texture, -1)
+                    #TODO: read extra values from the actual textures
+                    extras = ""
+                    extras += ',\n        "repeat": [%d, %d]' % (1, 1)
+                    extras += ',\n        "offset": [%d, %d]' % (0, 0)
+                    extras += ',\n        "magFilter": "%s"' % "LinearFilter"
+                    extras += ',\n        "minFilter": "%s"' % "LinearMipMapLinearFilter"
+                    extras += ',\n        "anisotropy": %d' % 1
 
-        texture_count = material_property.GetSrcObjectCount(FbxTexture.ClassId)
-        for texture_index in range(texture_count):
-            texture = material_property.GetSrcObject(FbxTexture.ClassId, texture_index) 
+                    texture_string = TEMPLATE_TEXTURE % {
+                    "texture_id"   : generate_string(texture_id),
+                    "texture_file" : generate_string(texture_file),
+                    "extras"       : extras
+                    }
 
+                    scene_texture_list.append(texture_string)
+                    
 def extract_textures_from_node(node, scene_texture_list):
     name = node.GetName()
     mesh = node.GetNodeAttribute()
@@ -935,7 +959,7 @@ def extract_textures_from_node(node, scene_texture_list):
             texture_count = FbxLayerElement.sTypeTextureCount()
             for texture_index in range(texture_count):
                 material_property = material.FindProperty(FbxLayerElement.sTextureChannelNames(texture_index))
-                FindAndDisplayTextureInfoByProperty(material_property, material_index)
+                extract_material_textures(material_property, material_index, scene_texture_list)
 
 def generate_scene_texture_list_from_hierarchy(node, scene_texture_list):
     if node.GetNodeAttribute() == None:
