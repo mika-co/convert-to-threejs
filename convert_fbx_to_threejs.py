@@ -7,7 +7,7 @@ import math
 # #####################################################
 
 DEFAULTS = {
-"bgcolor" : [0, 0, 0],
+"bgcolor" : [0.667,0.667,0.667],
 "bgalpha" : 1.0,
 
 "position" : [0, 0, 0],
@@ -61,8 +61,8 @@ TEMPLATE_SCENE_ASCII = """\
     "materials"     : %(nmaterials)s,
     "textures"      : %(ntextures)s,
     "cameras"       : %(ncameras)s,
-    "lights"        : %(nlights)s
-    "type"          : "scene",
+    "lights"        : %(nlights)s,
+    "type"          : "scene"
 },
 
 "urlBaseType" : %(basetype)s,
@@ -80,7 +80,8 @@ TEMPLATE_SCENE_ASCII = """\
 {
     "bgcolor" : %(bgcolor)s,
     "bgalpha" : %(bgalpha)f,
-    "camera"  : %(defcamera)s
+    "camera"  : %(defcamera)s,
+    "fog"     : %(fog)s
 }
 
 }
@@ -242,6 +243,14 @@ def generate_normal(n):
 def generate_uv(uv):
     return TEMPLATE_UV % (uv[0], uv[1])
 
+def generate_uvs(uv_layers):
+    layers = []
+    for uvs in uv_layers:
+        layer = ",".join(generate_uv(n) for n in uvs)
+        layers.append(layer)
+
+    return ",".join("[%s]" % n for n in layers)
+
 def generate_section(label, content):
     return TEMPLATE_SECTION % (label, content)
 
@@ -291,89 +300,217 @@ def extract_vertex_positions(mesh):
     return positions
 
 def extract_vertex_normals(mesh):
-    control_points_count = mesh.GetControlPointsCount()
-    control_points = mesh.GetControlPoints()
+#   eNone             The mapping is undetermined.
+#   eByControlPoint   There will be one mapping coordinate for each surface control point/vertex.
+#   eByPolygonVertex  There will be one mapping coordinate for each vertex, for every polygon of which it is a part. This means that a vertex will have as many mapping coordinates as polygons of which it is a part.
+#   eByPolygon        There can be only one mapping coordinate for the whole polygon.
+#   eByEdge           There will be one mapping coordinate for each unique edge in the mesh. This is meant to be used with smoothing layer elements.
+#   eAllSame          There can be only one mapping coordinate for the whole surface.
 
-    normals = []
-    for i in range(control_points_count):
-        for j in range(mesh.GetLayerCount()):
-            mesh_normals = mesh.GetLayer(j).GetNormals()
-            if mesh_normals:
+    layered_normal_indices = []
+    layered_normal_values = []
+
+    poly_count = mesh.GetPolygonCount()
+    control_points = mesh.GetControlPoints() 
+
+    for l in range(mesh.GetLayerCount()):
+        mesh_normals = mesh.GetLayer(l).GetNormals()
+        if not mesh_normals:
+            continue
+          
+        normals_array = mesh_normals.GetDirectArray()
+        normals_count = normals_array.GetCount()
+  
+        if normals_count == 0:
+            continue
+
+        normal_indices = []
+        normal_values = []
+
+        # values
+        for i in range(normals_count):
+            normal = extract_vec3(normals_array.GetAt(i))
+            normal_values.append(normal)
+
+        # indices
+        vertexId = 0
+        for p in range(poly_count):
+            poly_size = mesh.GetPolygonSize(p)
+            poly_normals = []
+
+            for v in range(poly_size):
+                control_point_index = mesh.GetPolygonVertex(p, v)
+
                 if mesh_normals.GetMappingMode() == FbxLayerElement.eByControlPoint:
                     if mesh_normals.GetReferenceMode() == FbxLayerElement.eDirect:
-                        normals.append(extract_vec3(mesh_normals.GetDirectArray().GetAt(i)))
-    return normals
+                        poly_normals.append(control_point_index)
+                    elif mesh_normals.GetReferenceMode() == FbxLayerElement.eIndexToDirect:
+                        index = mesh_normals.GetIndexArray().GetAt(control_point_index)
+                        poly_normals.append(index)
+                elif mesh_normals.GetMappingMode() == FbxLayerElement.eByPolygonVertex:
+                    if mesh_normals.GetReferenceMode() == FbxLayerElement.eDirect:
+                        poly_normals.append(vertexId)
+                    elif mesh_normals.GetReferenceMode() == FbxLayerElement.eIndexToDirect:
+                        index = mesh_normals.GetIndexArray().GetAt(vertexId)
+                        poly_normals.append(index)
+                elif mesh_normals.GetMappingMode() == FbxLayerElement.eByPolygon or \
+                     mesh_normals.GetMappingMode() ==  FbxLayerElement.eAllSame or \
+                     mesh_normals.GetMappingMode() ==  FbxLayerElement.eNone:       
+                    print("unsupported normal mapping mode for polygon vertex")
+
+                vertexId += 1
+            normal_indices.append(poly_normals)
+
+        layered_normal_values.append(normal_values)
+        layered_normal_indices.append(normal_indices)
+
+    return layered_normal_values, layered_normal_indices
 
 def extract_vertex_colors(mesh):
-    control_points_count = mesh.GetControlPointsCount()
-    control_points = mesh.GetControlPoints()
+#   eNone             The mapping is undetermined.
+#   eByControlPoint   There will be one mapping coordinate for each surface control point/vertex.
+#   eByPolygonVertex  There will be one mapping coordinate for each vertex, for every polygon of which it is a part. This means that a vertex will have as many mapping coordinates as polygons of which it is a part.
+#   eByPolygon        There can be only one mapping coordinate for the whole polygon.
+#   eByEdge           There will be one mapping coordinate for each unique edge in the mesh. This is meant to be used with smoothing layer elements.
+#   eAllSame          There can be only one mapping coordinate for the whole surface.
 
-    colors = []
-    for i in range(control_points_count):
-        for j in range(mesh.GetLayerCount()):
-            mesh_colors = mesh.GetLayer(j).GetUVs()
-            if mesh_colors:
+    layered_color_indices = []
+    layered_color_values = []
+
+    poly_count = mesh.GetPolygonCount()
+    control_points = mesh.GetControlPoints() 
+
+    for l in range(mesh.GetLayerCount()):
+        mesh_colors = mesh.GetLayer(l).GetVertexColors()
+        if not mesh_colors:
+            continue
+          
+        colors_array = mesh_colors.GetDirectArray()
+        colors_count = colors_array.GetCount()
+  
+        if colors_count == 0:
+            continue
+
+        color_indices = []
+        color_values = []
+
+        # values
+        for i in range(colors_count):
+            color = extract_color(colors_array.GetAt(i))
+            color_values.append(color)
+
+        # indices
+        vertexId = 0
+        for p in range(poly_count):
+            poly_size = mesh.GetPolygonSize(p)
+            poly_colors = []
+
+            for v in range(poly_size):
+                control_point_index = mesh.GetPolygonVertex(p, v)
+
                 if mesh_colors.GetMappingMode() == FbxLayerElement.eByControlPoint:
                     if mesh_colors.GetReferenceMode() == FbxLayerElement.eDirect:
-                        colors.append(extract_color(mesh_colors.GetDirectArray().GetAt(i)))
+                        poly_colors.append(control_point_index)
                     elif mesh_colors.GetReferenceMode() == FbxLayerElement.eIndexToDirect:
-                        id = mesh_colors.GetIndexArray().GetAt(i)
-                        colors.append(extract_color(mesh_colors.GetDirectArray().GetAt(id)))
-                elif mesh_colors.GetMappingMode() ==  FbxLayerElement.eByPolygonVertex:
-                    lTextureUVIndex = mesh.GetTextureUVIndex(i, j)
-                    if mesh_colors.GetReferenceMode() == FbxLayerElement.eDirect or \
-                       mesh_colors.GetReferenceMode() == FbxLayerElement.eIndexToDirect:
-                        colors.append(extract_color(mesh_colors.GetDirectArray().GetAt(lTextureUVIndex)))
+                        index = mesh_colors.GetIndexArray().GetAt(control_point_index)
+                        poly_colors.append(index)
+                elif mesh_colors.GetMappingMode() == FbxLayerElement.eByPolygonVertex:
+                    if mesh_colors.GetReferenceMode() == FbxLayerElement.eDirect:
+                        poly_colors.append(vertexId)
+                    elif mesh_colors.GetReferenceMode() == FbxLayerElement.eIndexToDirect:
+                        index = mesh_colors.GetIndexArray().GetAt(vertexId)
+                        poly_colors.append(index)
                 elif mesh_colors.GetMappingMode() == FbxLayerElement.eByPolygon or \
-                     mesh_colors.GetMappingMode() == FbxLayerElement.eAllSame or \
-                     mesh_colors.GetMappingMode() ==  FbxLayerElement.eNone:
-                    pass
-    return colors
+                     mesh_colors.GetMappingMode() ==  FbxLayerElement.eAllSame or \
+                     mesh_colors.GetMappingMode() ==  FbxLayerElement.eNone:       
+                    print("unsupported color mapping mode for polygon vertex")
+
+                vertexId += 1
+            color_indices.append(poly_colors)
+
+        layered_color_values.append(color_values)
+        layered_color_indices.append(color_indices)
+
+    return layered_color_values, layered_color_indices
 
 def extract_vertex_uvs(mesh):
-    control_points_count = mesh.GetControlPointsCount()
-    control_points = mesh.GetControlPoints()
+#   eNone             The mapping is undetermined.
+#   eByControlPoint   There will be one mapping coordinate for each surface control point/vertex.
+#   eByPolygonVertex  There will be one mapping coordinate for each vertex, for every polygon of which it is a part. This means that a vertex will have as many mapping coordinates as polygons of which it is a part.
+#   eByPolygon        There can be only one mapping coordinate for the whole polygon.
+#   eByEdge           There will be one mapping coordinate for each unique edge in the mesh. This is meant to be used with smoothing layer elements.
+#   eAllSame          There can be only one mapping coordinate for the whole surface.
 
-    uvs = []
-    for i in range(control_points_count):
-        for j in range(mesh.GetLayerCount()):
-            mesh_uvs = mesh.GetLayer(j).GetUVs()
-            if mesh_uvs:
+    layered_uv_indices = []
+    layered_uv_values = []
+
+    poly_count = mesh.GetPolygonCount()
+    control_points = mesh.GetControlPoints() 
+
+    for l in range(mesh.GetLayerCount()):
+        mesh_uvs = mesh.GetLayer(l).GetUVs()
+        if not mesh_uvs:
+            continue
+          
+        uvs_array = mesh_uvs.GetDirectArray()
+        uvs_count = uvs_array.GetCount()
+  
+        if uvs_count == 0:
+            continue
+
+        uv_indices = []
+        uv_values = []
+
+        # values
+        for i in range(uvs_count):
+            uv = extract_vec2(uvs_array.GetAt(i))
+            uv_values.append(uv)
+
+        # indices
+        vertexId = 0
+        for p in range(poly_count):
+            poly_size = mesh.GetPolygonSize(p)
+            poly_uvs = []
+
+            for v in range(poly_size):
+                control_point_index = mesh.GetPolygonVertex(p, v)
+
                 if mesh_uvs.GetMappingMode() == FbxLayerElement.eByControlPoint:
                     if mesh_uvs.GetReferenceMode() == FbxLayerElement.eDirect:
-                        uvs.append(extract_vec2(mesh_uvs.GetDirectArray().GetAt(i)))
+                        poly_uvs.append(control_point_index)
                     elif mesh_uvs.GetReferenceMode() == FbxLayerElement.eIndexToDirect:
-                        id = mesh_uvs.GetIndexArray().GetAt(i)
-                        uvs.append(extract_vec2(mesh_uvs.GetDirectArray().GetAt(id)))
-                elif mesh_uvs.GetMappingMode() ==  FbxLayerElement.eByPolygonVertex:
-                    lTextureUVIndex = mesh.GetTextureUVIndex(i, j)
+                        index = mesh_uvs.GetIndexArray().GetAt(control_point_index)
+                        poly_uvs.append(index)
+                elif mesh_uvs.GetMappingMode() == FbxLayerElement.eByPolygonVertex:
+                    uv_texture_index = mesh.GetTextureUVIndex(p, v)
                     if mesh_uvs.GetReferenceMode() == FbxLayerElement.eDirect or \
                        mesh_uvs.GetReferenceMode() == FbxLayerElement.eIndexToDirect:
-                        uvs.append(extract_vec2(mesh_uvs.GetDirectArray().GetAt(lTextureUVIndex)))
+                        poly_uvs.append(uv_texture_index)
                 elif mesh_uvs.GetMappingMode() == FbxLayerElement.eByPolygon or \
-                     mesh_uvs.GetMappingMode() == FbxLayerElement.eAllSame or \
-                     mesh_uvs.GetMappingMode() ==  FbxLayerElement.eNone:
-                    pass
-    return uvs
+                     mesh_uvs.GetMappingMode() ==  FbxLayerElement.eAllSame or \
+                     mesh_uvs.GetMappingMode() ==  FbxLayerElement.eNone:       
+                    print("unsupported uv mapping mode for polygon vertex")
 
-def extract_mesh_face(indices, faceIndex, option_normals, option_colors, option_uv_coords, option_materials, vertex_offset, material_offset):
-    isTriangle = ( len(indices) == 3 )
+                vertexId += 1
+            uv_indices.append(poly_uvs)
 
-    if isTriangle:
-        nVertices = 3
-    else:
-        nVertices = 4
+        layered_uv_values.append(uv_values)
+        layered_uv_indices.append(uv_indices)
 
-    hasMaterial = option_materials
+    return layered_uv_values, layered_uv_indices
 
-    hasFaceUvs = False # not supported in Blender
-    hasFaceVertexUvs = option_uv_coords
+def generate_mesh_face(vertex_indices, polygon_index, normals, colors, uv_layers, materials):
+  
+    isTriangle = ( len(vertex_indices) == 3 )
+    nVertices = 3 if isTriangle else 4
 
+    hasMaterial = len(materials) > 0
+    hasFaceUvs = False
+    hasFaceVertexUvs = len(uv_layers) > 0
     hasFaceNormals = False # don't export any face normals (as they are computed in engine)
-    hasFaceVertexNormals = option_normals
-
-    hasFaceColors = False # not supported in Blender
-    hasFaceVertexColors = option_colors
+    hasFaceVertexNormals = len(normals) > 0
+    hasFaceColors = False 
+    hasFaceVertexColors = len(colors) > 0
 
     faceType = 0
     faceType = setBit(faceType, 0, not isTriangle)
@@ -402,42 +539,46 @@ def extract_mesh_face(indices, faceIndex, option_normals, option_colors, option_
     # must clamp in case on polygons bigger than quads
 
     for i in range(nVertices):
-        index = indices[i] + vertex_offset
+        index = vertex_indices[i]
         faceData.append(index)
 
-#    if hasMaterial:
-#        index = f.material_index + material_offset
-#        faceData.append( index )
+    if hasMaterial:
+        #TODO: get the correct material index
+        faceData.append( 0 )
 
     if hasFaceVertexUvs:
-        for i in range(nVertices):
-            index = indices[i]
-            faceData.append(index)
+        for layer_index, uvs in enumerate(uv_layers):
+            polygon_uvs = uvs[polygon_index]
+            for i in range(nVertices):
+                index = polygon_uvs[i]
+                faceData.append(index)
 
     if hasFaceVertexNormals:
+        polygon_normals = normals[polygon_index]
         for i in range(nVertices):
-            index = indices[i]
+            index = polygon_normals[i]
             faceData.append(index)
 
     if hasFaceVertexColors:
+        polygon_colors = colors[polygon_index]
         for i in range(nVertices):
-            index = indices[i]
+            index = polygon_colors[i]
             faceData.append(index)
 
     return ",".join( map(str, faceData) )
 
-def extract_mesh_faces(mesh, option_normals, option_colors, option_uv_coords, option_materials, vertex_offset, material_offset):
+def generate_mesh_faces(mesh, normals, colors, uv_layers, materials):
     poly_count = mesh.GetPolygonCount()
     control_points = mesh.GetControlPoints() 
 
     faces = []
-    for i in range(poly_count):
-        poly_size = mesh.GetPolygonSize(i)
-        face = []
-        for j in range(poly_size):
-            control_point_index = mesh.GetPolygonVertex(i, j)
-            face.append(control_point_index)
-        face = extract_mesh_face(face, i, option_normals, option_colors, option_uv_coords, option_materials, vertex_offset, material_offset)
+    for p in range(poly_count):
+        poly_size = mesh.GetPolygonSize(p)
+        vertex_indices = []
+        for v in range(poly_size):
+            control_point_index = mesh.GetPolygonVertex(p, v)
+            vertex_indices.append(control_point_index)
+        face = generate_mesh_face(vertex_indices, p, normals, colors, uv_layers, materials)
         faces.append(face)
     return faces
 
@@ -463,28 +604,36 @@ def extract_mesh_materials(mesh):
 
 def extract_mesh_from_node(node):
     mesh = node.GetNodeAttribute()
-    positions = extract_vertex_positions(mesh)
-    normals = extract_vertex_normals(mesh)
-    uvs = extract_vertex_uvs(mesh)
+    vertices = extract_vertex_positions(mesh)
     materials = extract_mesh_materials(mesh)
-    colors = []
-    uvs = []
-    normals = []
-    option_normals = len(normals) > 0
-    option_colors = len(colors) > 0
-    option_uv_coords = len(uvs) > 0
-    option_materials = len(materials) > 0
-    vertex_offset = 0
-    material_offset = 0
-    faces = extract_mesh_faces(mesh, option_normals, option_colors, option_uv_coords, option_materials, vertex_offset, material_offset)
+
+    normal_values, normal_indices = extract_vertex_normals(mesh)
+    color_values, color_indices = extract_vertex_colors(mesh)
+    uv_values, uv_indices = extract_vertex_uvs(mesh)
+
+    # Three.js only supports one layer of normals
+    if len(normal_values) > 0:
+        normal_values = normal_values[0]
+        normal_indices = normal_indices[0]
+
+    # Three.js only supports one layer of colors
+    if len(color_values) > 0:
+        color_values = color_values[0]
+        color_indices = color_indices[0]
+
+    faces = generate_mesh_faces(mesh, normal_indices, color_indices, uv_indices, materials)
+
+    nuvs = []
+    for layer_index, uvs in enumerate(uv_values):
+        nuvs.append(str(len(uvs)))
 
     metadata = {
-      "nvertex"      : len(positions),
+      "nvertex"      : len(vertices),
       "nface"         : len(faces),
-      "nnormal"       : len(normals),
-      "ncolor"        : len(colors),
-      "nuvs"           : len(uvs),
-      "nmaterial"     : 0,
+      "nnormal"       : len(normal_values),
+      "ncolor"        : len(color_values),
+      "nuvs"          : ",".join(nuvs),
+      "nmaterial"     : len(materials),
       "nmorphTarget"  : 0,
       "nbone"         : 0
     }
@@ -493,11 +642,11 @@ def extract_mesh_from_node(node):
       "metadata" : TEMPLATE_MESH_METADATA % metadata,
       "scale" : 1,
       "materials" : "",
-      "vertices" : ",".join(generate_vertex(v) for v in positions),
+      "vertices" : ",".join(generate_vertex(v) for v in vertices),
       "morphTargets" : "",
-      "normals" : ",".join(generate_normal(v) for v in normals),
-      "colors" : "",
-      "uvs" : ",".join(generate_uv(v) for v in uvs),
+      "normals" : ",".join(generate_normal(v) for v in normal_values),
+      "colors" : ",".join(generate_vec3(v) for v in color_values),
+      "uvs" : generate_uvs(uv_values),
       "faces" : ",".join(faces),
       "bones" : "",
       "skinIndices" : "",
@@ -663,14 +812,6 @@ def generate_material_string(material):
         parameters += ', "specular": %d' % specular
         parameters += ', "shininess": %.1g' % shininess
 
-        material_info = {
-        "material_id" : generate_string(material_id),
-        "type"        : generate_string(type_map[material_type]),
-        "parameters"  : parameters
-        }
-
-        return TEMPLATE_MATERIAL_SCENE % material_info
-
     elif material.GetClassId().Is(FbxSurfaceLambert.ClassId):
         # We found a Lambert material. Display its properties.
         material_type = "Lambert"
@@ -683,16 +824,20 @@ def generate_material_string(material):
         parameters += ', "opacity": %.2g' % transparency
         parameters += ', "ambient": %d' % ambient
 
-        material_info = {
-        "material_id" : generate_string(material_id),
-        "type"        : generate_string(type_map[material_type]),
-        "parameters"  : parameters
-        }
+    else: 
+        print("Unknown type of Material")
+        return ""
 
-        return TEMPLATE_MATERIAL_SCENE % material_info
+    parameters += ', "wireframe": false'
+    parameters += ', "wireframeLinewidth": 1'
 
-    print("Unknown type of Material")
-    return ""
+    material_info = {
+    "material_id" : generate_string(material_id),
+    "type"        : generate_string(type_map[material_type]),
+    "parameters"  : parameters
+    }
+
+    return TEMPLATE_MATERIAL_SCENE % material_info
 
 def extract_materials_from_node(node, scene_material_list):
     name = node.GetName()
@@ -823,7 +968,8 @@ def extract_light_from_node(node):
     position = transform.GetT()
 
     # TODO:
-    #   Support light direction
+    #   Add support for light direction
+    #   Add support for light target
     light_string = ""
     if light_type == "directional":
         light_string = TEMPLATE_LIGHT_DIRECTIONAL % {
@@ -865,27 +1011,6 @@ def generate_scene_light_list(scene):
 # #####################################################
 # Parse - Cameras 
 # #####################################################
-def generate_default_camera():
-    camera = DEFAULTS["camera"]
-    fov = camera["fov"]
-    aspect = camera["aspect"]
-    near = camera["near"]
-    far = camera["far"]
-    position = camera["position"]
-    target = camera["target"]
-
-    camera_string = TEMPLATE_CAMERA_PERSPECTIVE % {
-    "camera_id" : generate_string(camera["name"]),
-    "fov"       : fov,
-    "aspect"    : aspect,
-    "near"      : near,
-    "far"       : far,
-    "position"  : position,
-    "target"    : target
-    }
-
-    return camera_string
-
 def extract_camera_from_node(node):
     name = node.GetName()
     camera = node.GetNodeAttribute()
@@ -957,6 +1082,41 @@ def generate_scene_camera_list(scene):
     return scene_camera_list
 
 # #####################################################
+# Parse - Default Camera 
+# #####################################################
+def generate_default_camera():
+    camera = DEFAULTS["camera"]
+    camera_string = TEMPLATE_CAMERA_PERSPECTIVE % {
+    "camera_id" : generate_string(camera["name"]),
+    "fov"       : camera["fov"],
+    "aspect"    : camera["aspect"],
+    "near"      : camera["near"],
+    "far"       : camera["far"],
+    "position"  : camera["position"],
+    "target"    : camera["target"]
+    }
+
+    return camera_string
+
+def generate_scene_camera_name_list_from_hierarchy(node, scene_camera_list):
+    if node.GetNodeAttribute() == None:
+        print("NULL Node Attribute\n")
+    else:
+        attribute_type = (node.GetNodeAttribute().GetAttributeType())
+        if attribute_type == FbxNodeAttribute.eCamera:
+            scene_camera_list.append(node.GetName())
+    for i in range(node.GetChildCount()):
+        generate_scene_camera_name_list_from_hierarchy(node.GetChild(i), scene_camera_list)
+
+def generate_scene_camera_name_list(scene):
+    scene_camera_list = []
+    node = scene.GetRootNode()
+    if node:
+        for i in range(node.GetChildCount()):
+            generate_scene_camera_name_list_from_hierarchy(node.GetChild(i), scene_camera_list)
+    return scene_camera_list
+
+# #####################################################
 # Parse - Scene 
 # #####################################################
 def extract_scene(scene, filename):
@@ -967,7 +1127,10 @@ def extract_scene(scene, filename):
     objects = generate_scene_object_list(scene)
     cameras = generate_scene_camera_list(scene)
     lights = generate_scene_light_list(scene)
+    fogs = []
 
+    camera_names = generate_scene_camera_name_list(scene)
+    default_camera = camera_names[0] if len(camera_names) > 0 else "default_camera"
     if len(cameras) <= 0:
         cameras = [generate_default_camera()]
 
@@ -985,6 +1148,7 @@ def extract_scene(scene, filename):
     ["objects",    ",\n".join(objects + cameras + lights)],
     ["geometries", ",\n".join(geometries)],
     ["textures",   ",\n".join(textures)],
+    ["fogs",       ",\n".join(fogs)],
     ["materials",  ",\n".join(materials)],
     ["embeds",     ",\n".join(embeds)]
     ]
@@ -1003,7 +1167,8 @@ def extract_scene(scene, filename):
 
     "bgcolor"   : generate_vec3(DEFAULTS["bgcolor"]),
     "bgalpha"   : DEFAULTS["bgalpha"],
-    "defcamera" : "default_camera",
+    "defcamera" : generate_string(default_camera),
+    "fog"    : generate_string(""),
 
     "nobjects"      : nobjects,
     "ngeometries"   : ngeometries,
