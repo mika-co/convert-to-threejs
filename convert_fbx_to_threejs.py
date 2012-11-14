@@ -774,6 +774,55 @@ def generate_scene_embed_list(scene):
 # #####################################################
 # Parse - Material 
 # #####################################################
+def extract_material_texture_bindings(material_property, texture_list):
+    binding_types = {
+    "DiffuseColor": "map", #defined by Three.js
+    "DiffuseFactor": "diffuseFactor",
+    "EmissiveColor": "emissiveMap",
+    "EmissiveFactor": "emissiveFactor",
+    "AmbientColor": "ambientMap",
+    "AmbientFactor": "ambientFactor",
+    "SpecularColor": "specularMap", #defined by Three.js
+    "SpecularFactor": "specularFactor",
+    "ShininessExponent": "shininessExponent",
+    "NormalMap": "normalMap", #defined by Three.js
+    "Bump": "bumpMap", #defined by Three.js
+    "TransparentColor": "transparentMap",
+    "TransparencyFactor": "transparentFactor",
+    "ReflectionColor": "reflectionMap",
+    "ReflectionFactor": "reflectionFactor",
+    "DisplacementColor": "displacementMap",
+    "VectorDisplacementColor": "vectorDisplacementMap"
+    }
+
+    if material_property.IsValid():
+        #Here we have to check if it's layeredtextures, or just textures:
+        layered_texture_count = material_property.GetSrcObjectCount(FbxLayeredTexture.ClassId)
+        if layered_texture_count > 0:
+            for j in range(layered_texture_count):
+                layered_texture = material_property.GetSrcObject(FbxLayeredTexture.ClassId, j)
+                texture_count = layered_texture.GetSrcObjectCount(FbxTexture.ClassId)
+                for k in range(texture_count):
+                    texture = layered_texture.GetSrcObject(FbxTexture.ClassId,k)
+                    if texture:
+                        # NOTE the blend mode is ALWAYS on the LayeredTexture and NOT the one on the texture.
+                        # Why is that?  because one texture can be shared on different layered textures and might
+                        # have different blend modes.
+                        texture_file = texture.GetFileName()
+                        texture_id = os.path.splitext(os.path.basename(texture_file))[0]
+                        texture_binding = '"%s": "%s"' % (binding_types[str(material_property.GetName())], texture_id)
+                        texture_list.append(texture_binding)
+        else:
+            # no layered texture simply get on the property
+            texture_count = material_property.GetSrcObjectCount(FbxTexture.ClassId)
+            for j in range(texture_count):
+                texture = material_property.GetSrcObject(FbxTexture.ClassId,j)
+                if texture:
+                    texture_file = texture.GetFileName()
+                    texture_id = os.path.splitext(os.path.basename(texture_file))[0]
+                    texture_binding = '"%s": "%s"' % (binding_types[str(material_property.GetName())], texture_id)
+                    texture_list.append(texture_binding)
+
 def generate_material_string(material):
     material_id = material.GetName()
 
@@ -831,6 +880,16 @@ def generate_material_string(material):
     parameters += ', "wireframe": false'
     parameters += ', "wireframeLinewidth": 1'
 
+    texture_list = []
+    texture_count = FbxLayerElement.sTypeTextureCount()
+    for texture_index in range(texture_count):
+        material_property = material.FindProperty(FbxLayerElement.sTextureChannelNames(texture_index))
+        extract_material_texture_bindings(material_property, texture_list)
+    
+    if len(texture_list) > 0:
+        parameters += ', '
+        parameters += ', '.join(texture_list)
+        
     material_info = {
     "material_id" : generate_string(material_id),
     "type"        : generate_string(type_map[material_type]),
@@ -881,7 +940,7 @@ def generate_scene_material_list(scene):
 # #####################################################
 # Parse - Textures 
 # #####################################################
-def extract_material_textures(material_property, material_index, scene_texture_list):
+def extract_material_textures(material_property, scene_texture_list):
     if material_property.IsValid():
         #Here we have to check if it's layeredtextures, or just textures:
         layered_texture_count = material_property.GetSrcObjectCount(FbxLayeredTexture.ClassId)
@@ -959,7 +1018,7 @@ def extract_textures_from_node(node, scene_texture_list):
             texture_count = FbxLayerElement.sTypeTextureCount()
             for texture_index in range(texture_count):
                 material_property = material.FindProperty(FbxLayerElement.sTextureChannelNames(texture_index))
-                extract_material_textures(material_property, material_index, scene_texture_list)
+                extract_material_textures(material_property, scene_texture_list)
 
 def generate_scene_texture_list_from_hierarchy(node, scene_texture_list):
     if node.GetNodeAttribute() == None:
