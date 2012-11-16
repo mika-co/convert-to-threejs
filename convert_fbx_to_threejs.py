@@ -818,7 +818,7 @@ def generate_light_string(node, padding):
     light_types = ["point", "directional", "spot", "area", "volume"]
     light_type = light_types[light.LightType.Get()]
 
-    transform = node.EvaluateGlobalTransform()
+    transform = node.EvaluateLocalTransform()
     position = transform.GetT()
 
     output = []
@@ -902,7 +902,7 @@ def generate_camera_string(node, padding):
     target_node = node.GetTarget()
     target = ""
     if target_node:
-        transform = target.EvaluateGlobalTransform()
+        transform = target.EvaluateLocalTransform()
         target = transform.GetT()
     else:
         target = camera.InterestPosition.Get()
@@ -962,7 +962,7 @@ def generate_camera_string(node, padding):
 # #####################################################
 def generate_mesh_object_string(node, padding):
     mesh = node.GetNodeAttribute()
-    transform = node.EvaluateGlobalTransform()
+    transform = node.EvaluateLocalTransform()
     position = transform.GetT()
     scale = transform.GetS()
     rotation = getRadians(transform.GetR())
@@ -989,7 +989,7 @@ def generate_object_string(node, padding):
     "CameraStereo", "CameraSwitcher", "Light", "OpticalReference", "OpticalMarker", "NurbsCurve", 
     "TrimNurbsSurface", "Boundary", "NurbsSurface", "Shape", "LODGroup", "SubDiv", "CachedEffect", "Line"]
 
-    transform = node.EvaluateGlobalTransform()
+    transform = node.EvaluateLocalTransform()
     position = transform.GetT()
     scale = transform.GetS()
     rotation = getRadians(transform.GetR())
