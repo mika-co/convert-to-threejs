@@ -700,6 +700,13 @@ def generate_mesh_string(node):
     for layer_index, uvs in enumerate(uv_values):
         nuvs.append(str(len(uvs)))
 
+    nmaterials = len(materials)
+    nvertices = len(vertices)
+    nnormals = len(normal_values)
+    ncolors = len(color_values)
+    nfaces = len(faces)
+    nuvs = ",".join(nuvs)
+
     vertices = ",".join(join_vec3(v) for v in vertices)
     normals  = ",".join(join_vec3(v) for v in normal_values)
     colors   = ",".join(join_vec3(v) for v in color_values)
@@ -708,6 +715,13 @@ def generate_mesh_string(node):
 
     output = [
     '\t' + LabelString( getEmbedName( node ) ) + ' : {',
+    '	"metadata"  : {',
+    '		"vertices" : ' + str(nvertices) + ',',
+    '		"normals" : ' + str(nnormals) + ',',
+    '		"colors" : ' + str(ncolors) + ',',
+    '		"faces" : ' + str(nfaces) + ',',
+    '		"uvs" : ' + ArrayString(nuvs) + ',',
+    '	},',
     '	"scale" : ' + str( 1 ) + ',',   
     '	"vertices" : ' + ArrayString(vertices) + ',',   
     '	"normals" : ' + ArrayString(normals) + ',',   
