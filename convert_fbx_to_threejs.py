@@ -594,12 +594,12 @@ def extract_vertex_uvs(mesh):
 
     return layered_uv_values, layered_uv_indices
 
-def generate_mesh_face(vertex_indices, polygon_index, normals, colors, uv_layers, materials):
+def generate_mesh_face(mesh, vertex_indices, polygon_index, normals, colors, uv_layers, material_count, material_is_same):
   
     isTriangle = ( len(vertex_indices) == 3 )
     nVertices = 3 if isTriangle else 4
 
-    hasMaterial = len(materials) > 0
+    hasMaterial = material_count > 0
     hasFaceUvs = False
     hasFaceVertexUvs = len(uv_layers) > 0
     hasFaceNormals = False # don't export any face normals (as they are computed in engine)
@@ -638,8 +638,14 @@ def generate_mesh_face(vertex_indices, polygon_index, normals, colors, uv_layers
         faceData.append(index)
 
     if hasMaterial:
-        #TODO: get the correct material index
-        faceData.append( 0 )
+        material_id = 0
+        if not material_is_same:
+            for l in range(mesh.GetLayerCount()):
+                materials = mesh.GetLayer(l).GetMaterials()
+                if materials:
+                    material_id = materials.GetIndexArray().GetAt(polygon_index)
+                    break
+        faceData.append( material_id )
 
     if hasFaceVertexUvs:
         for layer_index, uvs in enumerate(uv_layers):
@@ -660,9 +666,21 @@ def generate_mesh_face(vertex_indices, polygon_index, normals, colors, uv_layers
             index = polygon_colors[i]
             faceData.append(index)
 
-    return ",".join( map(str, faceData) )
+    return ",".join( map(str, faceData) ) 
 
-def generate_mesh_faces(mesh, normals, colors, uv_layers, materials):
+def generate_mesh_faces(mesh, normals, colors, uv_layers):
+    has_same_material_for_all_polygons = True
+    for l in range(mesh.GetLayerCount()):
+        materials = mesh.GetLayer(l).GetMaterials()
+        if materials:
+            if materials.GetMappingMode() == FbxLayerElement.eByPolygon:
+                has_same_material_for_all_polygons = False
+                break
+
+    node = mesh.GetNode()
+    if node:
+        material_count = node.GetMaterialCount()
+
     poly_count = mesh.GetPolygonCount()
     control_points = mesh.GetControlPoints() 
 
@@ -673,34 +691,13 @@ def generate_mesh_faces(mesh, normals, colors, uv_layers, materials):
         for v in range(poly_size):
             control_point_index = mesh.GetPolygonVertex(p, v)
             vertex_indices.append(control_point_index)
-        face = generate_mesh_face(vertex_indices, p, normals, colors, uv_layers, materials)
+        face = generate_mesh_face(mesh, vertex_indices, p, normals, colors, uv_layers, material_count, has_same_material_for_all_polygons)
         faces.append(face)
     return faces
-
-def extract_mesh_materials(mesh):
-    material_list = []
-    node = None
-    if mesh:
-        node = mesh.GetNode()
-        if node:
-            material_count = node.GetMaterialCount()
-
-    for l in range(mesh.GetLayerCount()):
-        materials = mesh.GetLayer(l).GetMaterials()
-        if materials:
-            if materials.GetReferenceMode() == FbxLayerElement.eIndex:
-                #Materials are in an undefined external table
-                continue
-            for i in range(material_count):
-                material = node.GetMaterial(i)
-                material_list.append(material.GetName())
-
-    return material_list
 
 def generate_mesh_string(node):
     mesh = node.GetNodeAttribute()
     vertices = extract_vertex_positions(mesh)
-    materials = extract_mesh_materials(mesh)
 
     normal_values, normal_indices = extract_vertex_normals(mesh)
     color_values, color_indices = extract_vertex_colors(mesh)
@@ -716,13 +713,12 @@ def generate_mesh_string(node):
         color_values = color_values[0]
         color_indices = color_indices[0]
 
-    faces = generate_mesh_faces(mesh, normal_indices, color_indices, uv_indices, materials)
+    faces = generate_mesh_faces(mesh, normal_indices, color_indices, uv_indices)
 
     nuvs = []
     for layer_index, uvs in enumerate(uv_values):
         nuvs.append(str(len(uvs)))
 
-    nmaterials = len(materials)
     nvertices = len(vertices)
     nnormals = len(normal_values)
     ncolors = len(color_values)
