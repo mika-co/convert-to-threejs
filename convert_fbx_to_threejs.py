@@ -200,6 +200,21 @@ def generate_material_string(material):
 
     return generateMultiLineString( output, '\n\t\t', 0 )
 
+def generate_proxy_material_string(node, material_names):
+    
+    output = [
+
+    '\t' + LabelString( getMaterialName( node ) ) + ': {',
+    '	"type"    : "MeshFaceMaterial",',
+    '	"parameters"  : {',
+    '		"materials"  : ' + ArrayString( ",".join(LabelString(m) for m in material_names) ),
+    '	}',
+    '}'
+
+    ]
+
+    return generateMultiLineString( output, '\n\t\t', 0 )
+
 # #####################################################
 # Parse - Materials 
 # #####################################################
@@ -212,7 +227,8 @@ def extract_materials_from_node(node, material_list):
         node = mesh.GetNode()
         if node:
             material_count = node.GetMaterialCount()
-
+    
+    material_names = []
     for l in range(mesh.GetLayerCount()):
         materials = mesh.GetLayer(l).GetMaterials()
         if materials:
@@ -221,8 +237,14 @@ def extract_materials_from_node(node, material_list):
                 continue
             for i in range(material_count):
                 material = node.GetMaterial(i)
-                scene_material = generate_material_string(material)
-                material_list.append(scene_material)
+                material_names.append(getMaterialName(material))
+                material_string = generate_material_string(material)
+                material_list.append(material_string)
+
+    if material_count > 0:
+      proxy_material = generate_proxy_material_string(node, material_names)
+      material_list.append(proxy_material)
+
 
 def generate_materials_from_hierarchy(node, material_list):
     if node.GetNodeAttribute() == None:
