@@ -738,9 +738,10 @@ def generate_mesh_string(node):
     '		"normals" : ' + str(nnormals) + ',',
     '		"colors" : ' + str(ncolors) + ',',
     '		"faces" : ' + str(nfaces) + ',',
-    '		"uvs" : ' + ArrayString(nuvs) + ',',
+    '		"uvs" : ' + ArrayString(nuvs),
     '	},',
     '	"scale" : ' + str( 1 ) + ',',   
+    '	"materials" : ' + ArrayString("") + ',',   
     '	"vertices" : ' + ArrayString(vertices) + ',',   
     '	"normals" : ' + ArrayString(normals) + ',',   
     '	"colors" : ' + ArrayString(colors) + ',',   
@@ -1103,8 +1104,8 @@ def extract_scene(scene, filename):
     camera_names = generate_camera_name_list(scene)
     scene_settings = scene.GetGlobalSettings()
 
-    bgcolor = 0
-    bgalpha = 0
+    bgcolor = Vector3String( (0.667,0.667,0.667) )
+    bgalpha = 1
     defcamera = LabelString(camera_names[0] if len(camera_names) > 0 else "")
     deffog = LabelString("")
 
