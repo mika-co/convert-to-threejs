@@ -60,7 +60,7 @@ def getObjectVisible(n):
     return BoolString(True)
     
 def getRadians(v):
-    return (v[0]/180, v[1]/180, v[2]/180)
+    return ((v[0]*math.pi)/180, (v[1]*math.pi)/180, (v[2]*math.pi)/180)
 
 def getHex(c):
     color = (int(c[0]*255) << 16) + (int(c[1]*255) << 8) + int(c[2]*255)
@@ -849,7 +849,7 @@ def generate_light_string(node, padding):
 				'\t\t' + LabelString( getObjectName( node ) ) + ' : {',
 				'	"type"      : "DirectionalLight",',
 				'	"color"     : ' + str(getHex(light.Color.Get())) + ',',
-				'	"intensity" : ' + str(light.Intensity.Get()) + ',',
+				'	"intensity" : ' + str(light.Intensity.Get()/100) + ',',
 				'	"direction" : ' + Vector3String( position ) + ',',
 				'	"target"    : ' + LabelString( getObjectName( node.GetTarget() ) ) + ( ',' if node.GetChildCount() > 0 else '' )
 
@@ -862,7 +862,7 @@ def generate_light_string(node, padding):
 				'\t\t' + LabelString( getObjectName( node ) ) + ' : {',
 				'	"type"      : "PointLight",',
 				'	"color"     : ' + str(getHex(light.Color.Get())) + ',',
-				'	"intensity" : ' + str(light.Intensity.Get()) + ',',
+				'	"intensity" : ' + str(light.Intensity.Get()/100) + ',',
 				'	"position"  : ' + Vector3String( position ) + ',',
 				'	"distance"  : ' + str(light.FarAttenuationEnd.Get()) + ( ',' if node.GetChildCount() > 0 else '' )
 
@@ -875,7 +875,7 @@ def generate_light_string(node, padding):
 				'\t\t' + LabelString( getObjectName( node ) ) + ' : {',
 				'	"type"      : "SpotLight",',
 				'	"color"     : ' + str(getHex(light.Color.Get())) + ',',
-				'	"intensity" : ' + str(light.Intensity.Get()) + ',',
+				'	"intensity" : ' + str(light.Intensity.Get()/100) + ',',
 				'	"position"  : ' + Vector3String( position ) + ',',
 				'	"distance"  : ' + str(light.FarAttenuationEnd.Get()) + ',',
 				'	"angle"     : ' + str(light.OuterAngle.Get()) + ',',
