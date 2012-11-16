@@ -775,6 +775,28 @@ def generate_geometry_list(scene):
     return geometry_list
 
 # #####################################################
+# Generate - Camera Names
+# #####################################################
+def generate_camera_name_list_from_hierarchy(node, camera_list):
+    if node.GetNodeAttribute() == None:
+        print("NULL Node Attribute\n")
+    else:
+        attribute_type = (node.GetNodeAttribute().GetAttributeType())
+        if attribute_type == FbxNodeAttribute.eCamera:
+            camera_string = getObjectName(node) 
+            camera_list.append(camera_string)
+    for i in range(node.GetChildCount()):
+        generate_camera_name_list_from_hierarchy(node.GetChild(i), camera_list)
+
+def generate_camera_name_list(scene):
+    camera_list = []
+    node = scene.GetRootNode()
+    if node:
+        for i in range(node.GetChildCount()):
+            generate_camera_name_list_from_hierarchy(node.GetChild(i), camera_list)
+    return camera_list
+
+# #####################################################
 # Generate - Light Object 
 # #####################################################
 def generate_light_string(node, padding):
@@ -787,17 +809,7 @@ def generate_light_string(node, padding):
 
     output = []
 
-    if light_type == "ambient":
-
-        output = [
-
-        '\t\t' + LabelString( getObjectName( node ) ) + ' : {',
-        '	"type"  : "AmbientLight",',
-        '	"color" : ' + str(getHex(light.Color.Get())) + ( ',' if node.GetChildCount() > 0 else '' )
-
-        ]
-
-    elif light_type == "directional":
+    if light_type == "directional":
 
 				output = [
 
@@ -841,6 +853,32 @@ def generate_light_string(node, padding):
 
     return generateMultiLineString( output, '\n\t\t', padding )
 
+def generate_ambient_light_string(scene):
+
+    scene_settings = scene.GetGlobalSettings()
+    ambient_color = scene_settings.GetAmbientColor()
+    ambient_color = (ambient_color.mRed, ambient_color.mGreen, ambient_color.mBlue)
+
+    if ambient_color[0] == 0 and ambient_color[1] == 0 and ambient_color[2] == 0:
+        return None
+
+    class AmbientLight:
+        def GetName(self):
+            return "AmbientLight"
+
+    node = AmbientLight()
+
+    output = [
+
+    '\t\t' + LabelString( getObjectName( node ) ) + ' : {',
+    '	"type"  : "AmbientLight",',
+    '	"color" : ' + str(getHex(ambient_color)),
+    '}'
+
+    ]
+
+    return generateMultiLineString( output, '\n\t\t', 0 )
+    
 # #####################################################
 # Generate - Camera Object 
 # #####################################################
@@ -959,6 +997,7 @@ def generate_object_string(node, padding):
 # Parse - Objects 
 # #####################################################
 def generate_object_hierarchy(node, object_list, pad, siblings_left):
+    object_count = 0
     if node.GetNodeAttribute() == None:
         print("NULL Node Attribute\n")
     else:
@@ -966,33 +1005,47 @@ def generate_object_hierarchy(node, object_list, pad, siblings_left):
         if attribute_type == FbxNodeAttribute.eMesh:
             object_string = generate_mesh_object_string(node, pad)
             object_list.append(object_string)
+            object_count += 1
         elif attribute_type == FbxNodeAttribute.eLight:
             object_string = generate_light_string(node, pad)
             object_list.append(object_string)
+            object_count += 1
         elif attribute_type == FbxNodeAttribute.eCamera:
             object_string = generate_camera_string(node, pad)
             object_list.append(object_string)
+            object_count += 1
         else:
             object_string = generate_object_string(node, pad)
             object_list.append(object_string)
+            object_count += 1
 
     if node.GetChildCount() > 0:
       object_list.append( PaddingString( pad + 1 ) + '\t\t"children" : {\n' )
 
       for i in range(node.GetChildCount()):
-          generate_object_hierarchy(node.GetChild(i), object_list, pad + 2, node.GetChildCount() - i - 1)
+          object_count += generate_object_hierarchy(node.GetChild(i), object_list, pad + 2, node.GetChildCount() - i - 1)
 
       object_list.append( PaddingString( pad + 1 ) + '\t\t}' )
-
     object_list.append( PaddingString( pad ) + '\t\t}' + (',\n' if siblings_left > 0 else ''))
+
+    return object_count
 
 def generate_scene_objects_string(scene):
     object_count = 0
     object_list = []
+
+    ambient_light = generate_ambient_light_string(scene)
+    if ambient_light:
+        if scene.GetNodeCount() > 0:
+            ambient_light += (',\n')
+        object_list.append(ambient_light)
+        object_count += 1
+
     node = scene.GetRootNode()
     if node:
         for i in range(node.GetChildCount()):
-            generate_object_hierarchy(node.GetChild(i), object_list, 0, node.GetChildCount() - i - 1)
+            object_count += generate_object_hierarchy(node.GetChild(i), object_list, 0, node.GetChildCount() - i - 1)
+
     return "\n".join(object_list), object_count
 
 # #####################################################
@@ -1007,17 +1060,20 @@ def extract_scene(scene, filename):
     embeds = generate_embed_list(scene)
     fogs = []
 
-    ntextures = 0
-    nmaterials = 0
-    ngeometries = 0
+    ntextures = len(textures)
+    nmaterials = len(materials)
+    ngeometries = len(geometries)
 
     position = Vector3String( (0,0,0) )
     rotation = Vector3String( (0,0,0) )
     scale    = Vector3String( (1,1,1) )
 
+    camera_names = generate_camera_name_list(scene)
+    scene_settings = scene.GetGlobalSettings()
+
     bgcolor = 0
     bgalpha = 0
-    defcamera = LabelString("")
+    defcamera = LabelString(camera_names[0] if len(camera_names) > 0 else "")
     deffog = LabelString("")
 
     geometries = generateMultiLineString( geometries, ",\n\n\t", 0 )
