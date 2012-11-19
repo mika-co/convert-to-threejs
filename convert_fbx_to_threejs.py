@@ -3,6 +3,12 @@ import sys
 import math
 
 # #####################################################
+# Globals
+# #####################################################
+option_textures = True
+option_prefix = True
+
+# #####################################################
 # Templates
 # #####################################################
 def Vector2String(v):
@@ -37,24 +43,42 @@ def BoolString(value):
 def getObjectName(o): 
     if not o:
         return ""  
-    return "Object_" + o.GetName()
+    prefix = ""
+    if option_prefix:
+        prefix = "Object_"
+    return prefix + o.GetName()
       
 def getGeometryName(g):
-    return "Geometry_" + g.GetName()
+    prefix = ""
+    if option_prefix:
+        prefix = "Geometry_"
+    return prefix + g.GetName()
 
 def getEmbedName(e):
-    return "Embed_" + e.GetName()
+    prefix = ""
+    if option_prefix:
+        prefix = "Embed_"
+    return prefix + e.GetName()
 
 def getMaterialName(m):
-    return "Material_" + m.GetName()
+    prefix = ""
+    if option_prefix:
+        prefix = "Material_"
+    return prefix + m.GetName()
 
 def getTextureName(t):
     texture_file = t.GetFileName()
     texture_id = os.path.splitext(os.path.basename(texture_file))[0]
-    return "Texture_" + texture_id
+    prefix = ""
+    if option_prefix:
+        prefix = "Texture_"
+    return prefix + texture_id
 
 def getFogName(f):
-    return "Fog_" + f.GetName()
+    prefix = ""
+    if option_prefix:
+        prefix = "Fog_"
+    return prefix + f.GetName()
 
 def getObjectVisible(n):
     return BoolString(True)
@@ -182,13 +206,14 @@ def generate_material_string(material):
       print("Unknown type of Material")
       return ''
 
-    texture_list = []
-    texture_count = FbxLayerElement.sTypeTextureCount()
-    for texture_index in range(texture_count):
-        material_property = material.FindProperty(FbxLayerElement.sTextureChannelNames(texture_index))
-        generate_texture_bindings(material_property, texture_list)
+    if option_textures:
+        texture_list = []
+        texture_count = FbxLayerElement.sTypeTextureCount()
+        for texture_index in range(texture_count):
+            material_property = material.FindProperty(FbxLayerElement.sTextureChannelNames(texture_index))
+            generate_texture_bindings(material_property, texture_list)
 
-    output += texture_list
+        output += texture_list
 
     wireframe = BoolString(False)
     wireframeLinewidth = "1"
@@ -248,7 +273,7 @@ def extract_materials_from_node(node, material_list):
 
 def generate_materials_from_hierarchy(node, material_list):
     if node.GetNodeAttribute() == None:
-        print("NULL Node Attribute\n")
+        pass
     else:
         attribute_type = (node.GetNodeAttribute().GetAttributeType())
         if attribute_type == FbxNodeAttribute.eMesh:
@@ -331,7 +356,7 @@ def extract_textures_from_node(node, texture_list):
 
 def generate_textures_from_hierarchy(node, texture_list):
     if node.GetNodeAttribute() == None:
-        print("NULL Node Attribute\n")
+        pass
     else:
         attribute_type = (node.GetNodeAttribute().GetAttributeType())
         if attribute_type == FbxNodeAttribute.eMesh:
@@ -340,6 +365,9 @@ def generate_textures_from_hierarchy(node, texture_list):
         generate_textures_from_hierarchy(node.GetChild(i), texture_list)
 
 def generate_texture_list(scene):
+    if not option_textures:
+        return []
+
     texture_list = []
     node = scene.GetRootNode()
     if node:
@@ -757,7 +785,7 @@ def generate_mesh_string(node):
 # #####################################################
 def generate_embed_list_from_hierarchy(node, embed_list):
     if node.GetNodeAttribute() == None:
-        print("NULL Node Attribute\n")
+        pass
     else:
         attribute_type = (node.GetNodeAttribute().GetAttributeType())
         if attribute_type == FbxNodeAttribute.eMesh:
@@ -790,7 +818,7 @@ def generate_geometry_string(node):
 
 def generate_geometry_list_from_hierarchy(node, geometry_list):
     if node.GetNodeAttribute() == None:
-        print("NULL Node Attribute\n")
+        pass
     else:
         attribute_type = (node.GetNodeAttribute().GetAttributeType())
         if attribute_type == FbxNodeAttribute.eMesh:
@@ -812,7 +840,7 @@ def generate_geometry_list(scene):
 # #####################################################
 def generate_camera_name_list_from_hierarchy(node, camera_list):
     if node.GetNodeAttribute() == None:
-        print("NULL Node Attribute\n")
+        pass
     else:
         attribute_type = (node.GetNodeAttribute().GetAttributeType())
         if attribute_type == FbxNodeAttribute.eCamera:
@@ -940,6 +968,8 @@ def generate_camera_string(node, padding):
 
         aspect = camera.PixelAspectRatio.Get()
         fov = camera.FieldOfView.Get()
+        fov = 75
+        far = 1000
 
         output = [
 
@@ -1013,10 +1043,16 @@ def generate_object_string(node, padding):
     scale = transform.GetS()
     rotation = getRadians(transform.GetR())
 
+    node_type = ""
+    if node.GetNodeAttribute() == None:
+        node_type = "Null"
+    else:
+        node_type = node_types[node.GetNodeAttribute().GetAttributeType()]
+
     output = [
 
     '\t\t' + LabelString( getObjectName( node ) ) + ' : {',
-    '	"fbx_type" : ' + LabelString( node_types[node.GetNodeAttribute().GetAttributeType()] ) + ',',
+    '	"fbx_type" : ' + LabelString( node_type ) + ',',
     '	"position" : ' + Vector3String( position ) + ',',
     '	"rotation" : ' + Vector3String( rotation ) + ',',
     '	"scale"	   : ' + Vector3String( scale ) + ',',
@@ -1032,7 +1068,9 @@ def generate_object_string(node, padding):
 def generate_object_hierarchy(node, object_list, pad, siblings_left):
     object_count = 0
     if node.GetNodeAttribute() == None:
-        print("NULL Node Attribute\n")
+        object_string = generate_object_string(node, pad)
+        object_list.append(object_string)
+        object_count += 1
     else:
         attribute_type = (node.GetNodeAttribute().GetAttributeType())
         if attribute_type == FbxNodeAttribute.eMesh:
@@ -1199,6 +1237,8 @@ def write_file(fname, content):
 # main
 # #####################################################
 if __name__ == "__main__":
+    from optparse import OptionParser
+
     try:
         from FbxCommon import *
     except ImportError:
@@ -1217,20 +1257,28 @@ if __name__ == "__main__":
 
     # Prepare the FBX SDK.
     sdk_manager, scene = InitializeSdkObjects()
+    
+    usage = "Usage: %prog [source_file.fbx] [output_file.js] [options]"
+    parser = OptionParser(usage=usage)
+    parser.add_option('-t', '--no-textures', action='store_true', dest='notextures', help="don't include textures in output file", default=False)
+    parser.add_option('-p', '--no-prefix', action='store_true', dest='noprefix', help="don't prefix object names in output file", default=False)
+    (options, args) = parser.parse_args()
+    option_textures = True if not options.notextures else False
+    option_prefix = True if not options.noprefix else False
 
     # The converter takes an FBX file as an argument.
-    if len(sys.argv) > 2:
-        print("\n\nLoading file: %s\n" % sys.argv[1])
-        result = LoadScene(sdk_manager, scene, sys.argv[1])
+    if len(args) > 1:
+        print("\nLoading file: %s\n" % args[0])
+        result = LoadScene(sdk_manager, scene, args[0])
     else:
         result = False
-        print("\n\nUsage: convert_fbx_to_threejs [source_file.fbx] [output_file.js]\n")
+        print("\nUsage: convert_fbx_to_threejs [source_file.fbx] [output_file.js]\n")
 
     if not result:
-        print("\n\nAn error occurred while loading the file...")
+        print("\nAn error occurred while loading the file...")
     else:
-        output_content = extract_scene(scene, os.path.basename(sys.argv[1]))
-        output_path = os.path.join(os.getcwd(), sys.argv[2])
+        output_content = extract_scene(scene, os.path.basename(args[0]))
+        output_path = os.path.join(os.getcwd(), args[1])
         write_file(output_path, output_content)
         print("\nExported Three.js file to:\n%s\n" % output_path)
 
