@@ -241,7 +241,7 @@ def extract_materials_from_node(node, material_list):
                 material_string = generate_material_string(material)
                 material_list.append(material_string)
 
-    if material_count > 0:
+    if material_count > 1:
       proxy_material = generate_proxy_material_string(node, material_names)
       material_list.append(proxy_material)
 
@@ -986,11 +986,28 @@ def generate_mesh_object_string(node, padding):
     scale = transform.GetS()
     rotation = getRadians(transform.GetR())
 
+    material_count = node.GetMaterialCount()
+    material_name = ""
+
+    if material_count > 0:
+        material_names = []
+        for l in range(mesh.GetLayerCount()):
+            materials = mesh.GetLayer(l).GetMaterials()
+            if materials:
+                if materials.GetReferenceMode() == FbxLayerElement.eIndex:
+                    #Materials are in an undefined external table
+                    continue
+                for i in range(material_count):
+                    material = node.GetMaterial(i)
+                    material_names.append( getMaterialName(material) )
+        #If this mesh has more than one material, use a proxy material
+        material_name = getMaterialName( node ) if material_count > 1 else material_names[0] 
+
     output = [
 
     '\t\t' + LabelString( getObjectName( node ) ) + ' : {',
     '	"geometry" : ' + LabelString( getGeometryName( node ) ) + ',',
-    '	"material" : ' + LabelString( getMaterialName( node ) ) + ',',
+    '	"material" : ' + LabelString( material_name ) + ',',
     '	"position" : ' + Vector3String( position ) + ',',
     '	"rotation" : ' + Vector3String( rotation ) + ',',
     '	"scale"	   : ' + Vector3String( scale ) + ',',
