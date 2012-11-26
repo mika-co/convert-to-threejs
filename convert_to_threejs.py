@@ -1,3 +1,5 @@
+# @author zfedoran / http://github.com/zfedoran
+
 import os
 import sys
 import math
@@ -1380,7 +1382,7 @@ def extract_scene(scene, filename):
     return "\n".join(output)
 
 # #####################################################
-# helpers
+# file helpers
 # #####################################################
 def write_file(fname, content):
     out = open(fname, "w")
