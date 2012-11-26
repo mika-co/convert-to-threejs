@@ -5,8 +5,14 @@ import math
 # #####################################################
 # Globals
 # #####################################################
+option_triangulate = True
 option_textures = True
 option_prefix = True
+option_geometry = False
+option_default_camera = False
+option_default_light = False
+
+converter = None
 
 # #####################################################
 # Templates
@@ -99,6 +105,29 @@ def generateMultiLineString(lines, separator, padding):
     return separator.join(cleanLines)
 		
 # #####################################################
+# Generate - Triangles 
+# #####################################################
+def triangulate_node_hierarchy(node):
+    node_attribute = node.GetNodeAttribute();
+
+    if node_attribute:
+        if node_attribute.GetAttributeType() == FbxNodeAttribute.eMesh or \
+           node_attribute.GetAttributeType() == FbxNodeAttribute.eNurbs or \
+           node_attribute.GetAttributeType() == FbxNodeAttribute.eNurbsSurface or \
+           node_attribute.GetAttributeType() == FbxNodeAttribute.ePatch:
+            converter.TriangulateInPlace(node);
+        
+        child_count = node.GetChildCount()
+        for i in range(child_count):
+            triangulate_node_hierarchy(node.GetChild(i))
+
+def triangulate_scene(scene):
+    node = scene.GetRootNode()
+    if node:
+        for i in range(node.GetChildCount()):
+            triangulate_node_hierarchy(node.GetChild(i))
+
+# #####################################################
 # Generate - Material String 
 # #####################################################
 def generate_texture_bindings(material_property, texture_list):
@@ -155,7 +184,9 @@ def generate_material_string(material):
         ambient   = str(getHex(material.Ambient.Get()))
         diffuse   = str(getHex(material.Diffuse.Get()))
         emissive  = str(getHex(material.Emissive.Get()))
-        opacity   = str(1.0 - material.TransparencyFactor.Get())
+        opacity   = 1.0 - material.TransparencyFactor.Get()
+        opacity   = 1.0 if opacity == 0 else opacity
+        opacity   = str(opacity)
         transparent = BoolString(False)
         reflectivity = "1"
 
@@ -179,7 +210,9 @@ def generate_material_string(material):
         diffuse   = str(getHex(material.Diffuse.Get()))
         emissive  = str(getHex(material.Emissive.Get()))
         specular  = str(getHex(material.Specular.Get()))
-        opacity   = str(1.0 - material.TransparencyFactor.Get())
+        opacity   = 1.0 - material.TransparencyFactor.Get()
+        opacity   = 1.0 if opacity == 0 else opacity
+        opacity   = str(opacity)
         shininess = str(material.Shininess.Get())
         transparent = BoolString(False)
         reflectivity = "1"
@@ -788,9 +821,17 @@ def generate_embed_list_from_hierarchy(node, embed_list):
         pass
     else:
         attribute_type = (node.GetNodeAttribute().GetAttributeType())
-        if attribute_type == FbxNodeAttribute.eMesh:
+        if attribute_type == FbxNodeAttribute.eMesh or \
+           attribute_type == FbxNodeAttribute.eNurbs or \
+           attribute_type == FbxNodeAttribute.eNurbsSurface or \
+           attribute_type == FbxNodeAttribute.ePatch:
+
+            if attribute_type != FbxNodeAttribute.eMesh:
+                converter.TriangulateInPlace(node);
+
             embed_string = generate_mesh_string(node)
             embed_list.append(embed_string)
+
     for i in range(node.GetChildCount()):
         generate_embed_list_from_hierarchy(node.GetChild(i), embed_list)
 
@@ -860,6 +901,25 @@ def generate_camera_name_list(scene):
 # #####################################################
 # Generate - Light Object 
 # #####################################################
+def generate_default_light_string(padding):
+    direction = (1,1,1)
+    color = (1,1,1)
+    intensity = 80.0
+
+    output = [
+
+    '\t\t' + LabelString( 'default_light' ) + ' : {',
+    '	"type"      : "DirectionalLight",',
+    '	"color"     : ' + str(getHex(color)) + ',',
+    '	"intensity" : ' + str(intensity/100.0) + ',',
+    '	"direction" : ' + Vector3String( direction ) + ',',
+    '	"target"    : ' + LabelString( getObjectName( None ) ),
+    ' }'
+
+    ]
+
+    return generateMultiLineString( output, '\n\t\t', padding )
+
 def generate_light_string(node, padding):
     light = node.GetNodeAttribute()
     light_types = ["point", "directional", "spot", "area", "volume"]
@@ -877,7 +937,7 @@ def generate_light_string(node, padding):
 				'\t\t' + LabelString( getObjectName( node ) ) + ' : {',
 				'	"type"      : "DirectionalLight",',
 				'	"color"     : ' + str(getHex(light.Color.Get())) + ',',
-				'	"intensity" : ' + str(light.Intensity.Get()/100) + ',',
+				'	"intensity" : ' + str(light.Intensity.Get()/100.0) + ',',
 				'	"direction" : ' + Vector3String( position ) + ',',
 				'	"target"    : ' + LabelString( getObjectName( node.GetTarget() ) ) + ( ',' if node.GetChildCount() > 0 else '' )
 
@@ -890,7 +950,7 @@ def generate_light_string(node, padding):
 				'\t\t' + LabelString( getObjectName( node ) ) + ' : {',
 				'	"type"      : "PointLight",',
 				'	"color"     : ' + str(getHex(light.Color.Get())) + ',',
-				'	"intensity" : ' + str(light.Intensity.Get()/100) + ',',
+				'	"intensity" : ' + str(light.Intensity.Get()/100.0) + ',',
 				'	"position"  : ' + Vector3String( position ) + ',',
 				'	"distance"  : ' + str(light.FarAttenuationEnd.Get()) + ( ',' if node.GetChildCount() > 0 else '' )
 
@@ -903,7 +963,7 @@ def generate_light_string(node, padding):
 				'\t\t' + LabelString( getObjectName( node ) ) + ' : {',
 				'	"type"      : "SpotLight",',
 				'	"color"     : ' + str(getHex(light.Color.Get())) + ',',
-				'	"intensity" : ' + str(light.Intensity.Get()/100) + ',',
+				'	"intensity" : ' + str(light.Intensity.Get()/100.0) + ',',
 				'	"position"  : ' + Vector3String( position ) + ',',
 				'	"distance"  : ' + str(light.FarAttenuationEnd.Get()) + ',',
 				'	"angle"     : ' + str(light.OuterAngle.Get()) + ',',
@@ -943,6 +1003,26 @@ def generate_ambient_light_string(scene):
 # #####################################################
 # Generate - Camera Object 
 # #####################################################
+def generate_default_camera_string(padding):
+    position = (100, 100, 100)
+    near = 0.1
+    far = 1000
+    fov = 75
+
+    output = [
+
+    '\t\t' + LabelString( 'default_camera' ) + ' : {',
+    '	"type"     : "PerspectiveCamera",',
+    '	"fov"      : ' + str(fov) + ',',
+    '	"near"     : ' + str(near) + ',',
+    '	"far"      : ' + str(far) + ',',
+    '	"position" : ' + Vector3String( position ), 
+    ' }'
+
+    ]
+
+    return generateMultiLineString( output, '\n\t\t', padding )
+
 def generate_camera_string(node, padding):
     camera = node.GetNodeAttribute()
 
@@ -1124,9 +1204,23 @@ def generate_scene_objects_string(scene):
 
     ambient_light = generate_ambient_light_string(scene)
     if ambient_light:
-        if scene.GetNodeCount() > 0:
+        if scene.GetNodeCount() > 0 or option_default_light or option_default_camera:
             ambient_light += (',\n')
         object_list.append(ambient_light)
+        object_count += 1
+
+    if option_default_light:
+        default_light = generate_default_light_string(0)
+        if scene.GetNodeCount() > 0 or option_default_camera:
+            default_light += (',\n')
+        object_list.append(default_light)
+        object_count += 1
+
+    if option_default_camera:
+        default_camera = generate_default_camera_string(0)
+        if scene.GetNodeCount() > 0:
+            default_camera += (',\n')
+        object_list.append(default_camera)
         object_count += 1
 
     node = scene.GetRootNode()
@@ -1162,6 +1256,10 @@ def extract_scene(scene, filename):
     bgcolor = Vector3String( (0.667,0.667,0.667) )
     bgalpha = 1
     defcamera = LabelString(camera_names[0] if len(camera_names) > 0 else "")
+    if option_default_camera:
+      defcamera = LabelString('default_camera')
+
+    #TODO: extract fog info from scene
     deffog = LabelString("")
 
     geometries = generateMultiLineString( geometries, ",\n\n\t", 0 )
@@ -1271,21 +1369,33 @@ if __name__ == "__main__":
         msg += ' folder.'
         print(msg) 
         sys.exit(1)
-
-    # Prepare the FBX SDK.
-    sdk_manager, scene = InitializeSdkObjects()
     
     usage = "Usage: %prog [source_file.fbx] [output_file.js] [options]"
     parser = OptionParser(usage=usage)
-    parser.add_option('-t', '--no-textures', action='store_true', dest='notextures', help="don't include textures in output file", default=False)
+
+    parser.add_option('-t', '--triangulate', action='store_true', dest='triangulate', help="force quad geometry into triangles", default=False)
+    parser.add_option('-x', '--no-textures', action='store_true', dest='notextures', help="don't include texture references in output file", default=False)
     parser.add_option('-p', '--no-prefix', action='store_true', dest='noprefix', help="don't prefix object names in output file", default=False)
+    parser.add_option('-g', '--geometry-only', action='store_true', dest='geometry', help="output geometry only", default=False)
+    parser.add_option('-c', '--default-camera', action='store_true', dest='defcamera', help="include default camera in output scene", default=False)
+    parser.add_option('-l', '--defualt-light', action='store_true', dest='deflight', help="include default light in output scene", default=False)
+
     (options, args) = parser.parse_args()
+
+    option_triangulate = options.triangulate 
     option_textures = True if not options.notextures else False
     option_prefix = True if not options.noprefix else False
+    option_geometry = options.geometry 
+    option_default_camera = options.defcamera 
+    option_default_light = options.deflight 
+
+    # Prepare the FBX SDK.
+    sdk_manager, scene = InitializeSdkObjects()
+    converter = FbxGeometryConverter(sdk_manager)
 
     # The converter takes an FBX file as an argument.
     if len(args) > 1:
-        print("\nLoading file: %s\n" % args[0])
+        print("\nLoading file: %s" % args[0])
         result = LoadScene(sdk_manager, scene, args[0])
     else:
         result = False
@@ -1294,10 +1404,15 @@ if __name__ == "__main__":
     if not result:
         print("\nAn error occurred while loading the file...")
     else:
+        if option_triangulate:
+            print("\nForcing geometry to triangles")
+            triangulate_scene(scene)
+
         output_content = extract_scene(scene, os.path.basename(args[0]))
         output_path = os.path.join(os.getcwd(), args[1])
         write_file(output_path, output_content)
         print("\nExported Three.js file to:\n%s\n" % output_path)
+        # SaveScene(sdk_manager, scene, args[2], 8)
 
     # Destroy all objects created by the FBX SDK.
     sdk_manager.Destroy()
