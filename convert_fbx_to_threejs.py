@@ -836,7 +836,7 @@ def generate_mesh_string(node):
     '	},',
     '	"boundingBox"  : {',
     '		"min" : ' + ArrayString(aabb_min) + ',',   
-    '		"max" : ' + ArrayString(aabb_max) + ',',   
+    '		"max" : ' + ArrayString(aabb_max),   
     '	},',
     '	"scale" : ' + str( 1 ) + ',',   
     '	"materials" : ' + ArrayString("") + ',',   
