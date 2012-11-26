@@ -1313,7 +1313,7 @@ def extract_scene(scene, filename):
     '	"metadata": {',
     '		"formatVersion" : 3.2,',
     '		"type"		: "scene",',
-    '		"generatedBy"	: "https://github.com/zfedoran/fbx-to-threejs",',
+    '		"generatedBy"	: "convert-to-threejs.py",',
     '		"objects"       : ' + str(nobjects) + ',',
     '		"geometries"    : ' + str(ngeometries) + ',',
     '		"materials"     : ' + str(nmaterials) + ',',
