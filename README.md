@@ -1,4 +1,4 @@
-## fbx-to-threejs
+## convert-to-threejs
 
 Utility for converting model files to the Three.js JSON format files
 
@@ -12,7 +12,7 @@ Utility for converting model files to the Three.js JSON format files
 ## Usage 
 
 ```
-convert_fbx_to_threejs.py [source_file] [output_file] [options]
+convert_to_threejs.py [source_file] [output_file] [options]
 
 Options:
   -t, --triangulate     force quad geometry into triangles
