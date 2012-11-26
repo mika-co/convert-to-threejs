@@ -37,6 +37,7 @@ Options:
 
 * No skeletal animation support
 * Only Lambert and Phong materials are supported
+* Some camera and light properties are not converted correctly
 
 ## Dependencies
 
@@ -46,6 +47,11 @@ Options:
 ```
 You can download the python bindings from the Autodesk website: 
   http://usa.autodesk.com/fbx/
+```
+
+```
+Don't forget the visit the FBX SDK documentation website:
+http://docs.autodesk.com/FBX/2013/ENU/FBX-SDK-Documentation/cpp_ref/index.html
 ```
 
 ### Python
