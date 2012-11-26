@@ -445,6 +445,36 @@ def generate_uvs(uv_layers):
 
     return ",".join("[%s]" % n for n in layers)
 
+def extract_mesh_bounding_box(mesh):
+    control_points_count = mesh.GetControlPointsCount()
+    control_points = mesh.GetControlPoints()
+
+    minx = 0
+    miny = 0
+    minz = 0
+    maxx = 0
+    maxy = 0
+    maxz = 0
+
+    for i in range(control_points_count):
+        vertex = control_points[i]
+
+        if vertex[0] < minx:
+            minx = vertex[0]
+        if vertex[1] < miny:
+            miny = vertex[1]
+        if vertex[2] < minz:
+            minz = vertex[2]
+
+        if vertex[0] > maxx:
+            maxx = vertex[0]
+        if vertex[1] > maxy:
+            maxy = vertex[1]
+        if vertex[2] > maxz:
+            maxz = vertex[2]
+
+    return [minx, miny, minz], [maxx, maxy, maxz]
+
 def extract_vertex_positions(mesh):
     control_points_count = mesh.GetControlPointsCount()
     control_points = mesh.GetControlPoints()
@@ -759,6 +789,7 @@ def generate_mesh_faces(mesh, normals, colors, uv_layers):
 def generate_mesh_string(node):
     mesh = node.GetNodeAttribute()
     vertices = extract_vertex_positions(mesh)
+    aabb_min, aabb_max = extract_mesh_bounding_box(mesh)
 
     normal_values, normal_indices = extract_vertex_normals(mesh)
     color_values, color_indices = extract_vertex_colors(mesh)
@@ -791,6 +822,8 @@ def generate_mesh_string(node):
     colors   = ",".join(join_vec3(v) for v in color_values)
     faces    = ",".join(faces)
     uvs      = generate_uvs(uv_values)
+    aabb_min = ",".join(str(f) for f in aabb_min)
+    aabb_max = ",".join(str(f) for f in aabb_max)
 
     output = [
     '\t' + LabelString( getEmbedName( node ) ) + ' : {',
@@ -800,6 +833,10 @@ def generate_mesh_string(node):
     '		"colors" : ' + str(ncolors) + ',',
     '		"faces" : ' + str(nfaces) + ',',
     '		"uvs" : ' + ArrayString(nuvs),
+    '	},',
+    '	"boundingBox"  : {',
+    '		"min" : ' + ArrayString(aabb_min) + ',',   
+    '		"max" : ' + ArrayString(aabb_max) + ',',   
     '	},',
     '	"scale" : ' + str( 1 ) + ',',   
     '	"materials" : ' + ArrayString("") + ',',   
