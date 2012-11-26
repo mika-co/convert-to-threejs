@@ -22,6 +22,22 @@ Options:
   -l, --defualt-light   include a default light in the output scene
 ```
 
+## Supported Features
+
+* Object Hierarchies
+* Lights (Ambient, Point, Directional)
+* Cameras (Perspective, Ortho)
+* Geometries (Triangles, Quads, Nurbs)
+* Materials (Phong, Lambert)
+* Textures (Diffuse, Emissive, Ambient, Specular, Normal, Bump)
+* Multiple UV layers
+* Multiple materials per mesh
+
+## Current Limitations
+
+* No skeletal animation support
+* Only Lambert and Phong materials are supported
+
 ## Dependencies
 
 ### FBX SDK
@@ -42,3 +58,9 @@ tar jxf ./Python-2.6.8.tar.bz2
 cd ./Python-2.6.8
 ./configure --prefix=/opt/python2.6.8 && make && make install
 ```
+
+## Todo List
+
+* fix light and camera conversion (some properties are not correctly converted)
+* add support for skeletal animations
+* add support for fog conversion
