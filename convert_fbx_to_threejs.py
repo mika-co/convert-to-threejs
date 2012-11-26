@@ -103,7 +103,7 @@ def generateMultiLineString(lines, separator, padding):
         line = PaddingString(padding) + line
         cleanLines.append(line)
     return separator.join(cleanLines)
-		
+
 # #####################################################
 # Generate - Triangles 
 # #####################################################
@@ -370,7 +370,7 @@ def extract_material_textures(material_property, texture_list):
                 if texture:
                     texture_string = generate_texture_string(texture)
                     texture_list.append(texture_string)
-	
+
 def extract_textures_from_node(node, texture_list):
     name = node.GetName()
     mesh = node.GetNodeAttribute()
@@ -932,45 +932,45 @@ def generate_light_string(node, padding):
 
     if light_type == "directional":
 
-				output = [
+        output = [
 
-				'\t\t' + LabelString( getObjectName( node ) ) + ' : {',
-				'	"type"      : "DirectionalLight",',
-				'	"color"     : ' + str(getHex(light.Color.Get())) + ',',
-				'	"intensity" : ' + str(light.Intensity.Get()/100.0) + ',',
-				'	"direction" : ' + Vector3String( position ) + ',',
-				'	"target"    : ' + LabelString( getObjectName( node.GetTarget() ) ) + ( ',' if node.GetChildCount() > 0 else '' )
+        '\t\t' + LabelString( getObjectName( node ) ) + ' : {',
+        '	"type"      : "DirectionalLight",',
+        '	"color"     : ' + str(getHex(light.Color.Get())) + ',',
+        '	"intensity" : ' + str(light.Intensity.Get()/100.0) + ',',
+        '	"direction" : ' + Vector3String( position ) + ',',
+        '	"target"    : ' + LabelString( getObjectName( node.GetTarget() ) ) + ( ',' if node.GetChildCount() > 0 else '' )
 
-				]
+        ]
 
     elif light_type == "point":
 
-				output = [
+        output = [
 
-				'\t\t' + LabelString( getObjectName( node ) ) + ' : {',
-				'	"type"      : "PointLight",',
-				'	"color"     : ' + str(getHex(light.Color.Get())) + ',',
-				'	"intensity" : ' + str(light.Intensity.Get()/100.0) + ',',
-				'	"position"  : ' + Vector3String( position ) + ',',
-				'	"distance"  : ' + str(light.FarAttenuationEnd.Get()) + ( ',' if node.GetChildCount() > 0 else '' )
+        '\t\t' + LabelString( getObjectName( node ) ) + ' : {',
+        '	"type"      : "PointLight",',
+        '	"color"     : ' + str(getHex(light.Color.Get())) + ',',
+        '	"intensity" : ' + str(light.Intensity.Get()/100.0) + ',',
+        '	"position"  : ' + Vector3String( position ) + ',',
+        '	"distance"  : ' + str(light.FarAttenuationEnd.Get()) + ( ',' if node.GetChildCount() > 0 else '' )
 
-				]
+        ]
 
     elif light_type == "spot":
 
-				output = [
+        output = [
 
-				'\t\t' + LabelString( getObjectName( node ) ) + ' : {',
-				'	"type"      : "SpotLight",',
-				'	"color"     : ' + str(getHex(light.Color.Get())) + ',',
-				'	"intensity" : ' + str(light.Intensity.Get()/100.0) + ',',
-				'	"position"  : ' + Vector3String( position ) + ',',
-				'	"distance"  : ' + str(light.FarAttenuationEnd.Get()) + ',',
-				'	"angle"     : ' + str(light.OuterAngle.Get()) + ',',
-				'	"exponent"  : ' + str(light.DecayType.Get()) + ',',
-				'	"target"    : ' + LabelString( getObjectName( node.GetTarget() ) ) + ( ',' if node.GetChildCount() > 0 else '' )
+        '\t\t' + LabelString( getObjectName( node ) ) + ' : {',
+        '	"type"      : "SpotLight",',
+        '	"color"     : ' + str(getHex(light.Color.Get())) + ',',
+        '	"intensity" : ' + str(light.Intensity.Get()/100.0) + ',',
+        '	"position"  : ' + Vector3String( position ) + ',',
+        '	"distance"  : ' + str(light.FarAttenuationEnd.Get()) + ',',
+        '	"angle"     : ' + str(light.OuterAngle.Get()) + ',',
+        '	"exponent"  : ' + str(light.DecayType.Get()) + ',',
+        '	"target"    : ' + LabelString( getObjectName( node.GetTarget() ) ) + ( ',' if node.GetChildCount() > 0 else '' )
 
-				]
+        ]
 
     return generateMultiLineString( output, '\n\t\t', padding )
 
@@ -1269,74 +1269,76 @@ def extract_scene(scene, filename):
     fogs = generateMultiLineString( fogs, ",\n\n\t", 0 )
 
     output = [
-			'{',
-			'	"metadata": {',
-			'		"formatVersion" : 3.2,',
-			'		"type"		: "scene",',
-			'		"generatedBy"	: "https://github.com/zfedoran/fbx-to-threejs",',
-			'		"objects"       : ' + str(nobjects) + ',',
-			'		"geometries"    : ' + str(ngeometries) + ',',
-			'		"materials"     : ' + str(nmaterials) + ',',
-			'		"textures"      : ' + str(ntextures),
-			'	},',
 
-			'',
-			'	"urlBaseType": "relativeToScene",',
-			'',
+    '{',
+    '	"metadata": {',
+    '		"formatVersion" : 3.2,',
+    '		"type"		: "scene",',
+    '		"generatedBy"	: "https://github.com/zfedoran/fbx-to-threejs",',
+    '		"objects"       : ' + str(nobjects) + ',',
+    '		"geometries"    : ' + str(ngeometries) + ',',
+    '		"materials"     : ' + str(nmaterials) + ',',
+    '		"textures"      : ' + str(ntextures),
+    '	},',
 
-			'	"objects" :',
-			'	{',
-			objects,
-			'	},',
-			'',
+    '',
+    '	"urlBaseType": "relativeToScene",',
+    '',
 
-			'	"geometries" :',
-			'	{',
-			'\t' + 	geometries,
-			'	},',
-			'',
+    '	"objects" :',
+    '	{',
+    objects,
+    '	},',
+    '',
 
-			'	"materials" :',
-			'	{',
-			'\t' + 	materials,
-			'	},',
-			'',
+    '	"geometries" :',
+    '	{',
+    '\t' + 	geometries,
+    '	},',
+    '',
 
-			'	"textures" :',
-			'	{',
-			'\t' + 	textures,
-			'	},',
-			'',
+    '	"materials" :',
+    '	{',
+    '\t' + 	materials,
+    '	},',
+    '',
 
-			'	"embeds" :',
-			'	{',
-			'\t' + 	embeds,
-			'	},',
-			'',
+    '	"textures" :',
+    '	{',
+    '\t' + 	textures,
+    '	},',
+    '',
 
-			'	"fogs" :',
-			'	{',
-			'\t' + 	fogs,
-			'	},',
-			'',
+    '	"embeds" :',
+    '	{',
+    '\t' + 	embeds,
+    '	},',
+    '',
 
-			'	"transform" :',
-			'	{',
-			'		"position"  : ' + position + ',',
-			'		"rotation"  : ' + rotation + ',',
-			'		"scale"     : ' + scale,
-			'	},',
-			'',
+    '	"fogs" :',
+    '	{',
+    '\t' + 	fogs,
+    '	},',
+    '',
 
-			'	"defaults" :',
-			'	{',
-			'		"bgcolor" : ' + str(bgcolor) + ',',
-			'		"bgalpha" : ' + str(bgalpha) + ',',
-			'		"camera"  : ' + defcamera + ',',
-			'		"fog"  	  : ' + deffog,
-			'	}',
-			'}'
-		]
+    '	"transform" :',
+    '	{',
+    '		"position"  : ' + position + ',',
+    '		"rotation"  : ' + rotation + ',',
+    '		"scale"     : ' + scale,
+    '	},',
+    '',
+
+    '	"defaults" :',
+    '	{',
+    '		"bgcolor" : ' + str(bgcolor) + ',',
+    '		"bgalpha" : ' + str(bgalpha) + ',',
+    '		"camera"  : ' + defcamera + ',',
+    '		"fog"  	  : ' + deffog,
+    '	}',
+    '}'
+
+    ]
 
     return "\n".join(output)
 
