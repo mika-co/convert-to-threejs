@@ -1,6 +1,6 @@
 ## convert-to-threejs
 
-Utility for converting model files to the Three.js JSON format files
+Utility for converting model files to the Three.js JSON format
 
 ## Supported Formats
 
@@ -51,7 +51,7 @@ You can download the python bindings from the Autodesk website:
 
 ```
 Don't forget the visit the FBX SDK documentation website:
-http://docs.autodesk.com/FBX/2013/ENU/FBX-SDK-Documentation/cpp_ref/index.html
+  http://docs.autodesk.com/FBX/2013/ENU/FBX-SDK-Documentation/cpp_ref/index.html
 ```
 
 ### Python
